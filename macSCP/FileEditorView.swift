@@ -122,6 +122,11 @@ struct FileEditorView: View {
     @State private var showingUnsavedChangesAlert = false
     @State private var fontSize: CGFloat = 13
     @State private var showingFontSizePicker = false
+    @State private var showingSearchBar = false
+    @State private var searchText = ""
+    @State private var replaceText = ""
+    @State private var matchCount = 0
+    @State private var currentMatchIndex = 0
 
     var hasUnsavedChanges: Bool {
         fileContent != originalContent
@@ -154,12 +159,107 @@ struct FileEditorView: View {
                     }
 
                     Spacer()
+
+                    // Search toggle button
+                    Button(action: {
+                        showingSearchBar.toggle()
+                        if !showingSearchBar {
+                            searchText = ""
+                            replaceText = ""
+                        }
+                    }) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(showingSearchBar ? .accentColor : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Find and Replace (⌘F)")
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(Color(.windowBackgroundColor))
 
                 Divider()
+
+                // Search bar
+                if showingSearchBar {
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.secondary)
+                                .font(.system(size: 12))
+
+                            TextField("Find", text: $searchText)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 12))
+                                .onChange(of: searchText) { _, _ in
+                                    updateSearchMatches()
+                                }
+
+                            if !searchText.isEmpty {
+                                Text("\(currentMatchIndex)/\(matchCount)")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                                    .frame(minWidth: 40)
+
+                                Button(action: findPrevious) {
+                                    Image(systemName: "chevron.up")
+                                        .font(.system(size: 11))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(matchCount == 0)
+
+                                Button(action: findNext) {
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 11))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(matchCount == 0)
+                            }
+
+                            Button(action: {
+                                showingSearchBar = false
+                                searchText = ""
+                                replaceText = ""
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 12))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.left.arrow.right")
+                                .foregroundColor(.secondary)
+                                .font(.system(size: 12))
+
+                            TextField("Replace", text: $replaceText)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 12))
+
+                            Button("Replace") {
+                                replaceCurrent()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(matchCount == 0)
+
+                            Button("Replace All") {
+                                replaceAll()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(matchCount == 0)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 6)
+                    }
+                    .background(Color(.controlBackgroundColor))
+
+                    Divider()
+                }
             }
 
             // Editor
@@ -237,6 +337,20 @@ struct FileEditorView: View {
                 Button("Cancel") {
                     handleCancel()
                 }
+            }
+
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: {
+                    showingSearchBar.toggle()
+                    if !showingSearchBar {
+                        searchText = ""
+                        replaceText = ""
+                    }
+                }) {
+                    Label("Find", systemImage: "magnifyingglass")
+                }
+                .keyboardShortcut("f", modifiers: .command)
+                .help("Find and Replace (⌘F)")
             }
 
             ToolbarItem(placement: .confirmationAction) {
@@ -335,5 +449,58 @@ struct FileEditorView: View {
                 }
             }
         }
+    }
+
+    private func updateSearchMatches() {
+        guard !searchText.isEmpty else {
+            matchCount = 0
+            currentMatchIndex = 0
+            return
+        }
+
+        let matches = fileContent.ranges(of: searchText, options: .caseInsensitive)
+        matchCount = matches.count
+        currentMatchIndex = matchCount > 0 ? 1 : 0
+    }
+
+    private func findNext() {
+        guard matchCount > 0 else { return }
+        currentMatchIndex = currentMatchIndex < matchCount ? currentMatchIndex + 1 : 1
+    }
+
+    private func findPrevious() {
+        guard matchCount > 0 else { return }
+        currentMatchIndex = currentMatchIndex > 1 ? currentMatchIndex - 1 : matchCount
+    }
+
+    private func replaceCurrent() {
+        guard !searchText.isEmpty, matchCount > 0 else { return }
+
+        if let range = fileContent.ranges(of: searchText, options: .caseInsensitive).dropFirst(currentMatchIndex - 1).first {
+            fileContent.replaceSubrange(range, with: replaceText)
+            updateSearchMatches()
+        }
+    }
+
+    private func replaceAll() {
+        guard !searchText.isEmpty else { return }
+
+        fileContent = fileContent.replacingOccurrences(of: searchText, with: replaceText, options: .caseInsensitive)
+        updateSearchMatches()
+    }
+}
+
+extension String {
+    func ranges(of searchString: String, options: String.CompareOptions = []) -> [Range<String.Index>] {
+        var ranges: [Range<String.Index>] = []
+        var searchStartIndex = self.startIndex
+
+        while searchStartIndex < self.endIndex,
+              let range = self.range(of: searchString, options: options, range: searchStartIndex..<self.endIndex) {
+            ranges.append(range)
+            searchStartIndex = range.upperBound
+        }
+
+        return ranges
     }
 }
