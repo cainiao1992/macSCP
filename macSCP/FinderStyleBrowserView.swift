@@ -41,6 +41,8 @@ struct FinderStyleBrowserView: View {
     @State private var newFileName = ""
     @State private var isUploading = false
     @State private var uploadProgress: String = ""
+    @State private var showingFileEditor = false
+    @State private var fileToEdit: RemoteFile?
 
     var canGoBack: Bool {
         historyIndex > 0 && !isNavigating
@@ -129,6 +131,13 @@ struct FinderStyleBrowserView: View {
                                         }
                                         Divider()
                                     } else {
+                                        Button(action: {
+                                            fileToEdit = file
+                                            showingFileEditor = true
+                                        }) {
+                                            Label("Edit", systemImage: "pencil.line")
+                                        }
+
                                         Button(action: {
                                             // Download file action - placeholder
                                         }) {
@@ -320,6 +329,11 @@ struct FinderStyleBrowserView: View {
             }
         } message: {
             Text("Enter a new name for \"\(fileToRename?.name ?? "this item")\"")
+        }
+        .sheet(isPresented: $showingFileEditor) {
+            if let file = fileToEdit {
+                FileEditorView(file: file, sshManager: sshManager)
+            }
         }
     }
 

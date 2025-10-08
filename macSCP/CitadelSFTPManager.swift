@@ -276,10 +276,18 @@ class CitadelSFTPManager: ObservableObject {
 
         let data = try Data(contentsOf: localURL)
 
-        try await client.withSFTP { sftp in
-            try await sftp.withFile(filePath: remotePath, flags: [.write, .create, .truncate]) { file in
-                try await file.write(ByteBuffer(data: data))
+        do {
+            try await client.withSFTP { sftp in
+                // First try to remove the file if it exists
+                try? await sftp.remove(at: remotePath)
+
+                // Then create and write the new file
+                try await sftp.withFile(filePath: remotePath, flags: [.write, .create, .truncate]) { file in
+                    try await file.write(ByteBuffer(data: data))
+                }
             }
+        } catch {
+            throw parseSFTPError(error, operation: "upload file")
         }
     }
 
