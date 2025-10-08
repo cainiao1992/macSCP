@@ -44,6 +44,22 @@ struct FinderStyleBrowserView: View {
         historyIndex < navigationHistory.count - 1 && !isNavigating
     }
 
+    var pathComponents: [(name: String, path: String)] {
+        var result: [(String, String)] = []
+        let components = sshManager.currentPath.split(separator: "/")
+
+        if sshManager.currentPath.starts(with: "/") {
+            result.append(("Root", "/"))
+        }
+
+        for (index, component) in components.enumerated() {
+            let currentPath = "/" + components[0...index].joined(separator: "/")
+            result.append((String(component), currentPath))
+        }
+
+        return result
+    }
+
     var body: some View {
         Group {
             // Main content area
@@ -57,12 +73,13 @@ struct FinderStyleBrowserView: View {
                         }
                     )
                 } detail: {
-                    // File list
-                    ZStack {
-                        if sshManager.remoteFiles.isEmpty && !sshManager.currentPath.isEmpty && !isNavigating {
-                            EmptyStateView()
-                        } else {
-                            List(sshManager.remoteFiles, selection: $selectedFile) { file in
+                    // File list with breadcrumb
+                    VStack(spacing: 0) {
+                        ZStack {
+                            if sshManager.remoteFiles.isEmpty && !sshManager.currentPath.isEmpty && !isNavigating {
+                                EmptyStateView()
+                            } else {
+                                List(sshManager.remoteFiles, selection: $selectedFile) { file in
                                 HStack(spacing: 12) {
                                     FileIcon(file: file, size: 24)
 
@@ -139,6 +156,42 @@ struct FinderStyleBrowserView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(Color.black.opacity(0.1))
                         }
+                    }
+
+                    // Breadcrumb at bottom
+                    if !sshManager.currentPath.isEmpty {
+                        Divider()
+
+                        HStack(spacing: 4) {
+                            Image(systemName: "folder.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 4) {
+                                    ForEach(Array(pathComponents.enumerated()), id: \.offset) { index, component in
+                                        Button(action: {
+                                            navigateToDirectory(component.path)
+                                        }) {
+                                            Text(component.name)
+                                                .font(.system(size: 12))
+                                                .foregroundColor(index == pathComponents.count - 1 ? .primary : .secondary)
+                                        }
+                                        .buttonStyle(.plain)
+
+                                        if index < pathComponents.count - 1 {
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 10, weight: .semibold))
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color(.controlBackgroundColor))
+                    }
                     }
                 }
             } else {
