@@ -43,6 +43,8 @@ struct FinderStyleBrowserView: View {
     @State private var uploadProgress: String = ""
     @State private var showingFileEditor = false
     @State private var fileToEdit: RemoteFile?
+    @State private var isDownloading = false
+    @State private var downloadProgress: String = ""
 
     var canGoBack: Bool {
         historyIndex > 0 && !isNavigating
@@ -129,6 +131,13 @@ struct FinderStyleBrowserView: View {
                                         }) {
                                             Label("Open", systemImage: "folder.fill")
                                         }
+
+                                        Button(action: {
+                                            downloadFile(file)
+                                        }) {
+                                            Label("Download", systemImage: "arrow.down.circle")
+                                        }
+
                                         Divider()
                                     } else {
                                         Button(action: {
@@ -139,7 +148,7 @@ struct FinderStyleBrowserView: View {
                                         }
 
                                         Button(action: {
-                                            // Download file action - placeholder
+                                            downloadFile(file)
                                         }) {
                                             Label("Download", systemImage: "arrow.down.circle")
                                         }
@@ -194,6 +203,21 @@ struct FinderStyleBrowserView: View {
                                 ProgressView()
                                     .scaleEffect(0.8)
                                 Text(uploadProgress)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(12)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color.black.opacity(0.1))
+                        }
+
+                        // Download overlay
+                        if isDownloading {
+                            VStack(spacing: 8) {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text(downloadProgress)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -598,6 +622,96 @@ struct FinderStyleBrowserView: View {
             await MainActor.run {
                 isUploading = false
                 uploadProgress = ""
+            }
+        }
+    }
+
+    private func downloadFile(_ file: RemoteFile) {
+        // Open save panel to choose download location
+        let savePanel = NSSavePanel()
+        savePanel.nameFieldStringValue = file.name
+        savePanel.canCreateDirectories = true
+        savePanel.showsTagField = false
+
+        if file.isDirectory {
+            savePanel.message = "Choose where to save the folder"
+            savePanel.prompt = "Download Folder"
+        } else {
+            savePanel.message = "Choose where to save the file"
+            savePanel.prompt = "Download File"
+        }
+
+        savePanel.begin { response in
+            guard response == .OK, let saveURL = savePanel.url else {
+                return
+            }
+
+            Task {
+                await self.downloadItemRecursively(remoteFile: file, localURL: saveURL)
+            }
+        }
+    }
+
+    private func downloadItemRecursively(remoteFile: RemoteFile, localURL: URL) async {
+        await MainActor.run {
+            isDownloading = true
+            downloadProgress = "Downloading: \(remoteFile.name)"
+        }
+
+        defer {
+            Task { @MainActor in
+                isDownloading = false
+                downloadProgress = ""
+            }
+        }
+
+        let fileManager = FileManager.default
+
+        if remoteFile.isDirectory {
+            // Create local directory
+            do {
+                try fileManager.createDirectory(at: localURL, withIntermediateDirectories: true)
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to create directory '\(remoteFile.name)': \(error.localizedDescription)"
+                    showingErrorAlert = true
+                }
+                return
+            }
+
+            // List remote directory contents
+            do {
+                let originalPath = sshManager.currentPath
+                try await sshManager.listFiles(path: remoteFile.path)
+                let remoteContents = sshManager.remoteFiles
+
+                // Download each item recursively
+                for item in remoteContents {
+                    let itemLocalURL = localURL.appendingPathComponent(item.name)
+                    await downloadItemRecursively(remoteFile: item, localURL: itemLocalURL)
+                }
+
+                // Restore original path
+                try await sshManager.listFiles(path: originalPath)
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to download folder '\(remoteFile.name)': \(error.localizedDescription)"
+                    showingErrorAlert = true
+                }
+            }
+        } else {
+            // Download file
+            await MainActor.run {
+                downloadProgress = "Downloading: \(remoteFile.name)"
+            }
+
+            do {
+                try await sshManager.downloadFile(remotePath: remoteFile.path, to: localURL)
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to download file '\(remoteFile.name)': \(error.localizedDescription)"
+                    showingErrorAlert = true
+                }
             }
         }
     }
