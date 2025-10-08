@@ -13,6 +13,8 @@ struct macSCPApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
+            SSHConnection.self,
+            ConnectionFolder.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -26,6 +28,13 @@ struct macSCPApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+        }
+        .modelContainer(sharedModelContainer)
+
+        WindowGroup(id: "ssh-explorer", for: String.self) { $connectionId in
+            if let connectionId = connectionId {
+                SSHFileExplorerWindow(connectionId: connectionId)
+            }
         }
         .modelContainer(sharedModelContainer)
     }
