@@ -37,5 +37,13 @@ struct macSCPApp: App {
             }
         }
         .modelContainer(sharedModelContainer)
+
+        WindowGroup(id: "file-editor", for: String.self) { $editorId in
+            if let editorId = editorId {
+                FileEditorWindowView(editorId: editorId)
+            }
+        }
+        .modelContainer(sharedModelContainer)
+        .defaultSize(width: 1000, height: 700)
     }
 }

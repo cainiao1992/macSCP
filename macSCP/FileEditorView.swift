@@ -7,6 +7,106 @@
 
 import SwiftUI
 
+struct FileEditorWindowView: View {
+    let editorId: String
+
+    @State private var fileInfo: FileEditorInfo?
+    @StateObject private var sshManager = CitadelSFTPManager()
+    @State private var isConnecting = true
+    @State private var connectionError: String?
+
+    struct FileEditorInfo {
+        let file: RemoteFile
+        let host: String
+        let port: Int
+        let username: String
+        let password: String
+    }
+
+    var body: some View {
+        Group {
+            if isConnecting {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Connecting to server...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+            } else if let error = connectionError {
+                VStack(spacing: 12) {
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 40))
+                        .foregroundColor(.red)
+                    Text("Connection Failed")
+                        .font(.headline)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
+            } else if let fileInfo = fileInfo, sshManager.isConnected {
+                FileEditorView(file: fileInfo.file, sshManager: sshManager)
+            }
+        }
+        .onAppear {
+            loadEditorInfo()
+        }
+        .onDisappear {
+            Task {
+                await sshManager.disconnect()
+            }
+            // Clean up stored info
+            UserDefaults.standard.removeObject(forKey: "pendingEditor_\(editorId)")
+        }
+    }
+
+    private func loadEditorInfo() {
+        guard let storedInfo = UserDefaults.standard.dictionary(forKey: "pendingEditor_\(editorId)") else {
+            connectionError = "Failed to load editor information"
+            isConnecting = false
+            return
+        }
+
+        guard let fileData = storedInfo["file"] as? Data,
+              let file = try? JSONDecoder().decode(RemoteFile.self, from: fileData),
+              let host = storedInfo["host"] as? String,
+              let port = storedInfo["port"] as? Int,
+              let username = storedInfo["username"] as? String,
+              let password = storedInfo["password"] as? String else {
+            connectionError = "Invalid editor information"
+            isConnecting = false
+            return
+        }
+
+        let info = FileEditorInfo(
+            file: file,
+            host: host,
+            port: port,
+            username: username,
+            password: password
+        )
+
+        fileInfo = info
+
+        // Connect SSH manager
+        Task {
+            do {
+                try await sshManager.connect(host: host, port: port, username: username, password: password)
+                await MainActor.run {
+                    isConnecting = false
+                }
+            } catch {
+                await MainActor.run {
+                    connectionError = error.localizedDescription
+                    isConnecting = false
+                }
+            }
+        }
+    }
+}
+
 struct FileEditorView: View {
     let file: RemoteFile
     let sshManager: CitadelSFTPManager

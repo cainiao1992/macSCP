@@ -16,6 +16,7 @@ enum ViewMode {
 
 struct FinderStyleBrowserView: View {
     @ObservedObject var sshManager: CitadelSFTPManager
+    @Environment(\.openWindow) private var openWindow
 
     let host: String
     let port: Int
@@ -41,8 +42,6 @@ struct FinderStyleBrowserView: View {
     @State private var newFileName = ""
     @State private var isUploading = false
     @State private var uploadProgress: String = ""
-    @State private var showingFileEditor = false
-    @State private var fileToEdit: RemoteFile?
     @State private var isDownloading = false
     @State private var downloadProgress: String = ""
 
@@ -141,8 +140,7 @@ struct FinderStyleBrowserView: View {
                                         Divider()
                                     } else {
                                         Button(action: {
-                                            fileToEdit = file
-                                            showingFileEditor = true
+                                            openFileEditor(file)
                                         }) {
                                             Label("Edit", systemImage: "pencil.line")
                                         }
@@ -353,11 +351,6 @@ struct FinderStyleBrowserView: View {
             }
         } message: {
             Text("Enter a new name for \"\(fileToRename?.name ?? "this item")\"")
-        }
-        .sheet(isPresented: $showingFileEditor) {
-            if let file = fileToEdit {
-                FileEditorView(file: file, sshManager: sshManager)
-            }
         }
     }
 
@@ -624,6 +617,30 @@ struct FinderStyleBrowserView: View {
                 uploadProgress = ""
             }
         }
+    }
+
+    private func openFileEditor(_ file: RemoteFile) {
+        // Generate unique ID for this editor instance
+        let editorId = UUID().uuidString
+
+        // Encode file to data
+        guard let fileData = try? JSONEncoder().encode(file) else {
+            return
+        }
+
+        // Store editor info in UserDefaults
+        let editorInfo: [String: Any] = [
+            "file": fileData,
+            "host": host,
+            "port": port,
+            "username": username,
+            "password": password
+        ]
+
+        UserDefaults.standard.set(editorInfo, forKey: "pendingEditor_\(editorId)")
+
+        // Open editor window
+        openWindow(id: "file-editor", value: editorId)
     }
 
     private func downloadFile(_ file: RemoteFile) {
