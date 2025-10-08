@@ -45,30 +45,10 @@ struct FinderStyleBrowserView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Finder-style toolbar
-            FinderToolbar(
-                viewMode: $viewMode,
-                canGoBack: canGoBack,
-                canGoForward: canGoForward,
-                onBack: goBack,
-                onForward: goForward,
-                onNewFolder: { showingNewFolderDialog = true },
-                onRefresh: {
-                    Task {
-                        isNavigating = true
-                        defer { isNavigating = false }
-                        try? await sshManager.listFiles(path: sshManager.currentPath)
-                    }
-                },
-                currentPath: sshManager.currentPath
-            )
-
-            Divider()
-
+        Group {
             // Main content area
             if sshManager.isConnected {
-                HSplitView {
+                NavigationSplitView {
                     // Sidebar
                     FinderSidebar(
                         currentPath: sshManager.currentPath,
@@ -76,76 +56,88 @@ struct FinderStyleBrowserView: View {
                             navigateToDirectory(path)
                         }
                     )
-                    .frame(minWidth: 150, idealWidth: 180, maxWidth: 250)
+                } detail: {
+                    // File list
+                    ZStack {
+                        if sshManager.remoteFiles.isEmpty && !sshManager.currentPath.isEmpty && !isNavigating {
+                            EmptyStateView()
+                        } else {
+                            List(sshManager.remoteFiles, selection: $selectedFile) { file in
+                                HStack(spacing: 12) {
+                                    FileIcon(file: file, size: 24)
 
-                    // File browser
-                    VStack(spacing: 0) {
-                        // Files view
-                        ZStack {
-                            if sshManager.remoteFiles.isEmpty && !sshManager.currentPath.isEmpty && !isNavigating {
-                                EmptyStateView()
-                            } else {
-                                switch viewMode {
-                                case .list:
-                                    ListViewMode(
-                                        files: sshManager.remoteFiles,
-                                        selectedFile: $selectedFile,
-                                        onNavigate: navigateToDirectory,
-                                        onDelete: { file in
-                                            fileToDelete = file
-                                            showingDeleteConfirmation = true
-                                        },
-                                        onRename: { file in
-                                            fileToRename = file
-                                            newFileName = file.name
-                                            showingRenameDialog = true
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(file.name)
+                                            .font(.system(size: 13))
+
+                                        if !file.isDirectory {
+                                            Text(file.displaySize)
+                                                .font(.system(size: 11))
+                                                .foregroundColor(.secondary)
                                         }
-                                    )
-                                case .grid:
-                                    GridViewMode(
-                                        files: sshManager.remoteFiles,
-                                        selectedFile: $selectedFile,
-                                        onNavigate: navigateToDirectory,
-                                        onDelete: { file in
-                                            fileToDelete = file
-                                            showingDeleteConfirmation = true
-                                        },
-                                        onRename: { file in
-                                            fileToRename = file
-                                            newFileName = file.name
-                                            showingRenameDialog = true
+                                    }
+
+                                    Spacer()
+
+                                    if file.isDirectory {
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                                .contentShape(Rectangle())
+                                .onTapGesture(count: 2) {
+                                    if file.isDirectory {
+                                        navigateToDirectory(file.path)
+                                    }
+                                }
+                                .contextMenu {
+                                    if file.isDirectory {
+                                        Button(action: {
+                                            navigateToDirectory(file.path)
+                                        }) {
+                                            Label("Open", systemImage: "folder.fill")
                                         }
-                                    )
-                                case .columns:
-                                    ColumnViewMode(
-                                        files: sshManager.remoteFiles,
-                                        currentPath: sshManager.currentPath,
-                                        selectedFile: $selectedFile,
-                                        onNavigate: navigateToDirectory,
-                                        onDelete: { file in
-                                            fileToDelete = file
-                                            showingDeleteConfirmation = true
-                                        },
-                                        onRename: { file in
-                                            fileToRename = file
-                                            newFileName = file.name
-                                            showingRenameDialog = true
+                                        Divider()
+                                    } else {
+                                        Button(action: {
+                                            // Download file action - placeholder
+                                        }) {
+                                            Label("Download", systemImage: "arrow.down.circle")
                                         }
-                                    )
+                                        Divider()
+                                    }
+
+                                    Button(action: {
+                                        fileToRename = file
+                                        newFileName = file.name
+                                        showingRenameDialog = true
+                                    }) {
+                                        Label("Rename", systemImage: "pencil")
+                                    }
+
+                                    Button(role: .destructive, action: {
+                                        fileToDelete = file
+                                        showingDeleteConfirmation = true
+                                    }) {
+                                        Label("Delete", systemImage: "trash")
+                                    }
                                 }
                             }
+                            .listStyle(.inset)
+                        }
 
-                            // Loading overlay
-                            if isNavigating {
-                                VStack {
-                                    ProgressView()
-                                        .scaleEffect(0.8)
-                                        .padding(12)
-                                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                                }
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .background(Color.black.opacity(0.1))
+                        // Loading overlay
+                        if isNavigating {
+                            VStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .padding(12)
+                                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
                             }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color.black.opacity(0.1))
                         }
                     }
                 }
@@ -157,6 +149,46 @@ struct FinderStyleBrowserView: View {
             }
         }
         .frame(minWidth: 800, minHeight: 500)
+        .onAppear {
+            // Initialize navigation history with the starting path
+            if navigationHistory.isEmpty && !sshManager.currentPath.isEmpty {
+                navigationHistory = [sshManager.currentPath]
+                historyIndex = 0
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .navigation) {
+                Button(action: goBack) {
+                    Image(systemName: "chevron.left")
+                }
+                .disabled(!canGoBack)
+                .help("Back")
+
+                Button(action: goForward) {
+                    Image(systemName: "chevron.right")
+                }
+                .disabled(!canGoForward)
+                .help("Forward")
+            }
+
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button(action: { showingNewFolderDialog = true }) {
+                    Image(systemName: "folder.badge.plus")
+                }
+                .help("Create new folder")
+
+                Button(action: {
+                    Task {
+                        isNavigating = true
+                        defer { isNavigating = false }
+                        try? await sshManager.listFiles(path: sshManager.currentPath)
+                    }
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("Refresh")
+            }
+        }
         .alert("New Folder", isPresented: $showingNewFolderDialog) {
             TextField("Folder name", text: $newFolderName)
             Button("Cancel", role: .cancel) {
@@ -392,57 +424,38 @@ struct FinderToolbar: View {
     let currentPath: String
 
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
             // Navigation buttons
-            HStack(spacing: 4) {
-                Button(action: onBack) {
-                    Image(systemName: "chevron.left")
-                        .frame(width: 24, height: 24)
-                }
-                .disabled(!canGoBack)
-                .buttonStyle(.borderless)
-
-                Button(action: onForward) {
-                    Image(systemName: "chevron.right")
-                        .frame(width: 24, height: 24)
-                }
-                .disabled(!canGoForward)
-                .buttonStyle(.borderless)
+            Button(action: onBack) {
+                Image(systemName: "chevron.left")
             }
+            .disabled(!canGoBack)
+            .help("Back")
+
+            Button(action: onForward) {
+                Image(systemName: "chevron.right")
+            }
+            .disabled(!canGoForward)
+            .help("Forward")
 
             Divider()
-                .frame(height: 20)
+                .frame(height: 16)
 
-            // View mode selector
-            Picker("View", selection: $viewMode) {
-                Image(systemName: "list.bullet").tag(ViewMode.list)
-                Image(systemName: "square.grid.2x2").tag(ViewMode.grid)
-                Image(systemName: "rectangle.split.3x1").tag(ViewMode.columns)
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 150)
-
-            Divider()
-                .frame(height: 20)
+            Spacer()
 
             // Actions
             Button(action: onNewFolder) {
                 Image(systemName: "folder.badge.plus")
             }
-            .buttonStyle(.bordered)
             .help("Create new folder")
 
             Button(action: onRefresh) {
                 Image(systemName: "arrow.clockwise")
             }
-            .buttonStyle(.bordered)
             .help("Refresh")
-
-            Spacer()
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color(.windowBackgroundColor))
     }
 }
 
@@ -454,48 +467,34 @@ struct FinderSidebar: View {
     var body: some View {
         List {
             Section("Favorites") {
-                SidebarItem(icon: "house.fill", title: "Home", path: "~") {
-                    onNavigate("~")
+                Button(action: { onNavigate("~") }) {
+                    Label("Home", systemImage: "house.fill")
                 }
 
-                SidebarItem(icon: "folder.fill", title: "Root", path: "/") {
-                    onNavigate("/")
+                Button(action: { onNavigate("/") }) {
+                    Label("Root", systemImage: "folder.fill")
                 }
             }
 
             Section("Locations") {
-                SidebarItem(icon: "folder.fill", title: "etc", path: "/etc") {
-                    onNavigate("/etc")
+                Button(action: { onNavigate("/etc") }) {
+                    Label("etc", systemImage: "folder.fill")
                 }
 
-                SidebarItem(icon: "folder.fill", title: "var", path: "/var") {
-                    onNavigate("/var")
+                Button(action: { onNavigate("/var") }) {
+                    Label("var", systemImage: "folder.fill")
                 }
 
-                SidebarItem(icon: "folder.fill", title: "usr", path: "/usr") {
-                    onNavigate("/usr")
+                Button(action: { onNavigate("/usr") }) {
+                    Label("usr", systemImage: "folder.fill")
                 }
 
-                SidebarItem(icon: "folder.fill", title: "tmp", path: "/tmp") {
-                    onNavigate("/tmp")
+                Button(action: { onNavigate("/tmp") }) {
+                    Label("tmp", systemImage: "folder.fill")
                 }
             }
         }
         .listStyle(.sidebar)
-    }
-}
-
-struct SidebarItem: View {
-    let icon: String
-    let title: String
-    let path: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Label(title, systemImage: icon)
-        }
-        .buttonStyle(.plain)
     }
 }
 
@@ -920,8 +919,9 @@ struct FileIcon: View {
 
     var body: some View {
         Image(systemName: iconName)
-            .font(.system(size: size * 0.6))
+            .font(.system(size: size * 0.55, weight: .medium))
             .foregroundColor(iconColor)
+            .symbolRenderingMode(.hierarchical)
             .frame(width: size, height: size)
     }
 }
@@ -929,15 +929,17 @@ struct FileIcon: View {
 // MARK: - Empty State
 struct EmptyStateView: View {
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             Image(systemName: "folder")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
+                .font(.system(size: 48, weight: .thin))
+                .foregroundColor(.secondary.opacity(0.5))
+                .symbolRenderingMode(.hierarchical)
             Text("This folder is empty")
-                .font(.title3)
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.textBackgroundColor))
     }
 }
 
