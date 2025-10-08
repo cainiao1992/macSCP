@@ -467,31 +467,25 @@ struct FinderSidebar: View {
     var body: some View {
         List {
             Section("Favorites") {
-                Button(action: { onNavigate("~") }) {
-                    Label("Home", systemImage: "house.fill")
-                }
+                Label("Home", systemImage: "house.fill")
+                    .onTapGesture { onNavigate("~") }
 
-                Button(action: { onNavigate("/") }) {
-                    Label("Root", systemImage: "folder.fill")
-                }
+                Label("Root", systemImage: "folder.fill")
+                    .onTapGesture { onNavigate("/") }
             }
 
             Section("Locations") {
-                Button(action: { onNavigate("/etc") }) {
-                    Label("etc", systemImage: "folder.fill")
-                }
+                Label("etc", systemImage: "folder.fill")
+                    .onTapGesture { onNavigate("/etc") }
 
-                Button(action: { onNavigate("/var") }) {
-                    Label("var", systemImage: "folder.fill")
-                }
+                Label("var", systemImage: "folder.fill")
+                    .onTapGesture { onNavigate("/var") }
 
-                Button(action: { onNavigate("/usr") }) {
-                    Label("usr", systemImage: "folder.fill")
-                }
+                Label("usr", systemImage: "folder.fill")
+                    .onTapGesture { onNavigate("/usr") }
 
-                Button(action: { onNavigate("/tmp") }) {
-                    Label("tmp", systemImage: "folder.fill")
-                }
+                Label("tmp", systemImage: "folder.fill")
+                    .onTapGesture { onNavigate("/tmp") }
             }
         }
         .listStyle(.sidebar)
