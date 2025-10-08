@@ -326,17 +326,19 @@ class CitadelSFTPManager: ObservableObject {
 
         do {
             if isDirectory {
-                // For directories, we need to use SSH command since SFTP remove may not work for directories
-                let result = try await client.executeCommand("rmdir '\(path)'")
+                // For directories, use rm -rf to recursively delete
+                let result = try await client.executeCommand("rm -rf '\(path)'")
                 let output = String(buffer: result)
-                if !output.isEmpty && !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    // Check if there was an error
-                    if output.lowercased().contains("not empty") {
-                        throw SFTPError.operationFailed("Cannot delete folder: Directory is not empty.")
-                    } else if output.lowercased().contains("permission denied") {
+
+                // Check for errors in stderr or output
+                if !output.isEmpty {
+                    let trimmedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmedOutput.lowercased().contains("permission denied") {
                         throw SFTPError.operationFailed("Permission denied. You don't have permission to delete at this location.")
-                    } else {
-                        throw SFTPError.operationFailed("Failed to delete: \(output)")
+                    } else if trimmedOutput.lowercased().contains("no such file") {
+                        throw SFTPError.operationFailed("Path not found. The folder doesn't exist.")
+                    } else if !trimmedOutput.isEmpty {
+                        throw SFTPError.operationFailed("Failed to delete: \(trimmedOutput)")
                     }
                 }
             } else {

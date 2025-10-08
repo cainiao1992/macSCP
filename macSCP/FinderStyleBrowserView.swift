@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum ViewMode {
     case list
@@ -23,6 +24,9 @@ struct FinderStyleBrowserView: View {
 
     @State private var viewMode: ViewMode = .list
     @State private var selectedFile: RemoteFile?
+    @State private var selectedFileId: RemoteFile.ID?
+    @State private var lastClickTime: Date?
+    @State private var lastClickedId: RemoteFile.ID?
     @State private var navigationHistory: [String] = []
     @State private var historyIndex: Int = -1
     @State private var isNavigating = false
@@ -35,6 +39,8 @@ struct FinderStyleBrowserView: View {
     @State private var showingRenameDialog = false
     @State private var fileToRename: RemoteFile?
     @State private var newFileName = ""
+    @State private var isUploading = false
+    @State private var uploadProgress: String = ""
 
     var canGoBack: Bool {
         historyIndex > 0 && !isNavigating
@@ -79,36 +85,41 @@ struct FinderStyleBrowserView: View {
                             if sshManager.remoteFiles.isEmpty && !sshManager.currentPath.isEmpty && !isNavigating {
                                 EmptyStateView()
                             } else {
-                                List(sshManager.remoteFiles, selection: $selectedFile) { file in
-                                HStack(spacing: 12) {
-                                    FileIcon(file: file, size: 24)
+                                List(sshManager.remoteFiles) { file in
+                                Button(action: {
+                                    if file.isDirectory {
+                                        navigateToDirectory(file.path)
+                                    } else {
+                                        selectedFileId = file.id
+                                        selectedFile = file
+                                    }
+                                }) {
+                                    HStack(spacing: 12) {
+                                        FileIcon(file: file, size: 24)
 
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(file.name)
-                                            .font(.system(size: 13))
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(file.name)
+                                                .font(.system(size: 13))
 
-                                        if !file.isDirectory {
-                                            Text(file.displaySize)
-                                                .font(.system(size: 11))
+                                            if !file.isDirectory {
+                                                Text(file.displaySize)
+                                                    .font(.system(size: 11))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+
+                                        Spacer()
+
+                                        if file.isDirectory {
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 11, weight: .semibold))
                                                 .foregroundColor(.secondary)
                                         }
                                     }
-
-                                    Spacer()
-
-                                    if file.isDirectory {
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 11, weight: .semibold))
-                                            .foregroundColor(.secondary)
-                                    }
+                                    .padding(.vertical, 2)
+                                    .contentShape(Rectangle())
                                 }
-                                .padding(.vertical, 2)
-                                .contentShape(Rectangle())
-                                .onTapGesture(count: 2) {
-                                    if file.isDirectory {
-                                        navigateToDirectory(file.path)
-                                    }
-                                }
+                                .buttonStyle(.plain)
                                 .contextMenu {
                                     if file.isDirectory {
                                         Button(action: {
@@ -143,6 +154,17 @@ struct FinderStyleBrowserView: View {
                                 }
                             }
                             .listStyle(.inset)
+                            .onKeyPress(.return) {
+                                if let file = selectedFile, file.isDirectory {
+                                    navigateToDirectory(file.path)
+                                    return .handled
+                                }
+                                return .ignored
+                            }
+                            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                                handleDrop(providers: providers)
+                                return true
+                            }
                         }
 
                         // Loading overlay
@@ -153,6 +175,21 @@ struct FinderStyleBrowserView: View {
                                     .padding(12)
                                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
                             }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color.black.opacity(0.1))
+                        }
+
+                        // Upload overlay
+                        if isUploading {
+                            VStack(spacing: 8) {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text(uploadProgress)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(16)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(Color.black.opacity(0.1))
                         }
@@ -306,6 +343,7 @@ struct FinderStyleBrowserView: View {
                 // Clear selection after successful navigation
                 await MainActor.run {
                     selectedFile = nil
+                    selectedFileId = nil
                 }
             } catch {
                 print("Failed to navigate: \(error)")
@@ -333,6 +371,7 @@ struct FinderStyleBrowserView: View {
                 try await sshManager.changeDirectory(to: path)
                 await MainActor.run {
                     selectedFile = nil
+                    selectedFileId = nil
                 }
             } catch {
                 print("Failed to navigate: \(error)")
@@ -356,6 +395,7 @@ struct FinderStyleBrowserView: View {
                 try await sshManager.changeDirectory(to: path)
                 await MainActor.run {
                     selectedFile = nil
+                    selectedFileId = nil
                 }
             } catch {
                 print("Failed to navigate: \(error)")
@@ -460,6 +500,90 @@ struct FinderStyleBrowserView: View {
                     errorMessage = "Failed to rename '\(file.name)': \(error.localizedDescription)"
                     showingErrorAlert = true
                 }
+            }
+        }
+    }
+
+    private func handleDrop(providers: [NSItemProvider]) {
+        Task {
+            isUploading = true
+            uploadProgress = "Preparing upload..."
+
+            for provider in providers {
+                if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+                    _ = provider.loadObject(ofClass: URL.self) { url, error in
+                        guard let url = url else { return }
+
+                        Task {
+                            await self.uploadItemRecursively(localURL: url, remoteBasePath: self.sshManager.currentPath)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func uploadItemRecursively(localURL: URL, remoteBasePath: String) async {
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+
+        guard fileManager.fileExists(atPath: localURL.path, isDirectory: &isDirectory) else {
+            return
+        }
+
+        let itemName = localURL.lastPathComponent
+        let remotePath = remoteBasePath.hasSuffix("/") ? "\(remoteBasePath)\(itemName)" : "\(remoteBasePath)/\(itemName)"
+
+        if isDirectory.boolValue {
+            // It's a folder - create it and upload contents
+            await MainActor.run {
+                uploadProgress = "Creating folder: \(itemName)"
+            }
+
+            do {
+                // Create the folder on remote server
+                try await sshManager.createDirectory(path: remotePath)
+
+                // Get all items in the folder
+                let contents = try fileManager.contentsOfDirectory(at: localURL, includingPropertiesForKeys: nil)
+
+                // Upload each item recursively
+                for itemURL in contents {
+                    await uploadItemRecursively(localURL: itemURL, remoteBasePath: remotePath)
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to upload folder '\(itemName)': \(error.localizedDescription)"
+                    showingErrorAlert = true
+                }
+            }
+        } else {
+            // It's a file - upload it
+            await MainActor.run {
+                uploadProgress = "Uploading: \(itemName)"
+            }
+
+            do {
+                try await sshManager.uploadFile(localURL: localURL, to: remotePath)
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to upload file '\(itemName)': \(error.localizedDescription)"
+                    showingErrorAlert = true
+                }
+            }
+        }
+
+        // Refresh directory after all uploads complete
+        if remoteBasePath == sshManager.currentPath {
+            await MainActor.run {
+                uploadProgress = "Refreshing..."
+            }
+
+            try? await sshManager.listFiles(path: sshManager.currentPath)
+
+            await MainActor.run {
+                isUploading = false
+                uploadProgress = ""
             }
         }
     }
