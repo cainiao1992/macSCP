@@ -127,6 +127,9 @@ struct FileEditorView: View {
     @State private var replaceText = ""
     @State private var matchCount = 0
     @State private var currentMatchIndex = 0
+    @State private var searchRanges: [Range<String.Index>] = []
+    @State private var highlightedText: AttributedString = AttributedString()
+    @State private var scrollPosition: Int?
 
     var hasUnsavedChanges: Bool {
         fileContent != originalContent
@@ -194,6 +197,9 @@ struct FileEditorView: View {
                                 .onChange(of: searchText) { _, _ in
                                     updateSearchMatches()
                                 }
+                                .onSubmit {
+                                    findNext()
+                                }
 
                             if !searchText.isEmpty {
                                 Text("\(currentMatchIndex)/\(matchCount)")
@@ -214,6 +220,13 @@ struct FileEditorView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(matchCount == 0)
+
+                                Divider()
+                                    .frame(height: 12)
+
+                                Text("Clear search to edit")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
                             }
 
                             Button(action: {
@@ -270,14 +283,48 @@ struct FileEditorView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // Text editor
+                // Text editor with search highlighting
                 ZStack(alignment: .topLeading) {
                     Color(.textBackgroundColor)
 
-                    TextEditor(text: $fileContent)
-                        .font(.system(size: fontSize, design: .monospaced))
-                        .scrollContentBackground(.hidden)
-                        .padding(12)
+                    if !searchText.isEmpty && showingSearchBar {
+                        // Show highlighted text (read-only during search)
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    ForEach(Array(fileContent.components(separatedBy: .newlines).enumerated()), id: \.offset) { index, line in
+                                        HStack {
+                                            Text(getAttributedLine(lineIndex: index, lineText: line))
+                                                .font(.system(size: fontSize, design: .monospaced))
+                                                .textSelection(.enabled)
+                                                .id(index)
+                                            Spacer()
+                                        }
+                                    }
+                                }
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .onChange(of: scrollPosition) { _, newValue in
+                                if let position = newValue {
+                                    withAnimation {
+                                        proxy.scrollTo(position, anchor: .center)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Regular editable text editor
+                        TextEditor(text: $fileContent)
+                            .font(.system(size: fontSize, design: .monospaced))
+                            .scrollContentBackground(.hidden)
+                            .padding(12)
+                            .onChange(of: fileContent) { _, _ in
+                                if showingSearchBar && !searchText.isEmpty {
+                                    updateSearchMatches()
+                                }
+                            }
+                    }
                 }
             }
 
@@ -455,22 +502,107 @@ struct FileEditorView: View {
         guard !searchText.isEmpty else {
             matchCount = 0
             currentMatchIndex = 0
+            searchRanges = []
+            highlightedText = AttributedString(fileContent)
             return
         }
 
         let matches = fileContent.ranges(of: searchText, options: .caseInsensitive)
+        searchRanges = matches
         matchCount = matches.count
         currentMatchIndex = matchCount > 0 ? 1 : 0
+
+        // Create highlighted text
+        createHighlightedText()
+    }
+
+    private func createHighlightedText() {
+        var attributedString = AttributedString(fileContent)
+
+        // Highlight all matches
+        for (index, range) in searchRanges.enumerated() {
+            if let attributedRange = Range(range, in: attributedString) {
+                if index == currentMatchIndex - 1 {
+                    // Current match - bright yellow background
+                    attributedString[attributedRange].backgroundColor = .yellow
+                    attributedString[attributedRange].foregroundColor = .black
+                } else {
+                    // Other matches - lighter yellow background
+                    attributedString[attributedRange].backgroundColor = Color.yellow.opacity(0.3)
+                }
+            }
+        }
+
+        highlightedText = attributedString
+
+        // Calculate scroll position
+        if currentMatchIndex > 0 && currentMatchIndex <= searchRanges.count {
+            let currentRange = searchRanges[currentMatchIndex - 1]
+            let beforeMatch = String(fileContent[..<currentRange.lowerBound])
+            let lineNumber = beforeMatch.components(separatedBy: .newlines).count - 1
+            scrollPosition = max(0, lineNumber)
+        }
+    }
+
+    private func getAttributedLine(lineIndex: Int, lineText: String) -> AttributedString {
+        var attributedLine = AttributedString(lineText)
+
+        // Calculate the character offset for this line
+        let lines = fileContent.components(separatedBy: .newlines)
+        var charOffset = 0
+        for i in 0..<lineIndex {
+            charOffset += lines[i].count + 1 // +1 for newline
+        }
+
+        let lineStartIndex = fileContent.index(fileContent.startIndex, offsetBy: charOffset)
+        let lineEndIndex = fileContent.index(lineStartIndex, offsetBy: lineText.count)
+        let lineRange = lineStartIndex..<lineEndIndex
+
+        // Find matches in this line
+        for (index, range) in searchRanges.enumerated() {
+            if range.overlaps(lineRange) {
+                // Calculate the position within the line
+                let matchStart = max(range.lowerBound, lineStartIndex)
+                let matchEnd = min(range.upperBound, lineEndIndex)
+
+                if matchStart < matchEnd {
+                    let startOffset = fileContent.distance(from: lineStartIndex, to: matchStart)
+                    let endOffset = fileContent.distance(from: lineStartIndex, to: matchEnd)
+
+                    guard startOffset >= 0 && endOffset <= lineText.count else { continue }
+
+                    let attrStart = attributedLine.index(attributedLine.startIndex, offsetByCharacters: startOffset)
+                    let attrEnd = attributedLine.index(attributedLine.startIndex, offsetByCharacters: endOffset)
+
+                    if attrStart < attrEnd {
+                        let attrRange = attrStart..<attrEnd
+
+                        if index == currentMatchIndex - 1 {
+                            // Current match - bright yellow
+                            attributedLine[attrRange].backgroundColor = .yellow
+                            attributedLine[attrRange].foregroundColor = .black
+                        } else {
+                            // Other matches - light yellow
+                            attributedLine[attrRange].backgroundColor = Color.yellow.opacity(0.3)
+                        }
+                    }
+                }
+            }
+        }
+
+        return attributedLine
     }
 
     private func findNext() {
         guard matchCount > 0 else { return }
         currentMatchIndex = currentMatchIndex < matchCount ? currentMatchIndex + 1 : 1
+        createHighlightedText()
     }
 
     private func findPrevious() {
         guard matchCount > 0 else { return }
         currentMatchIndex = currentMatchIndex > 1 ? currentMatchIndex - 1 : matchCount
+        createHighlightedText()
     }
 
     private func replaceCurrent() {
