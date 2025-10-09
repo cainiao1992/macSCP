@@ -33,6 +33,8 @@ struct FinderStyleBrowserView: View {
     @State private var isNavigating = false
     @State private var showingNewFolderDialog = false
     @State private var newFolderName = ""
+    @State private var showingNewFileDialog = false
+    @State private var newFileNameInput = ""
     @State private var showingErrorAlert = false
     @State private var errorMessage = ""
     @State private var showingDeleteConfirmation = false
@@ -298,6 +300,11 @@ struct FinderStyleBrowserView: View {
                 }
                 .help("Create new folder")
 
+                Button(action: { showingNewFileDialog = true }) {
+                    Image(systemName: "doc.badge.plus")
+                }
+                .help("Create new file")
+
                 Button(action: {
                     Task {
                         isNavigating = true
@@ -320,6 +327,17 @@ struct FinderStyleBrowserView: View {
             }
         } message: {
             Text("Enter a name for the new folder")
+        }
+        .alert("New File", isPresented: $showingNewFileDialog) {
+            TextField("File name", text: $newFileNameInput)
+            Button("Cancel", role: .cancel) {
+                newFileNameInput = ""
+            }
+            Button("Create") {
+                createFile()
+            }
+        } message: {
+            Text("Enter a name for the new file")
         }
         .alert("Error", isPresented: $showingErrorAlert) {
             Button("OK", role: .cancel) { }
@@ -473,6 +491,46 @@ struct FinderStyleBrowserView: View {
                 print("Failed to create folder: \(error)")
                 await MainActor.run {
                     errorMessage = "Failed to create folder '\(folderName)': \(error.localizedDescription)"
+                    showingErrorAlert = true
+                }
+            }
+        }
+    }
+
+    private func createFile() {
+        guard !newFileNameInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+
+        let fileName = newFileNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filePath = sshManager.currentPath.hasSuffix("/")
+            ? "\(sshManager.currentPath)\(fileName)"
+            : "\(sshManager.currentPath)/\(fileName)"
+
+        Task {
+            isNavigating = true
+            defer {
+                isNavigating = false
+                newFileNameInput = ""
+            }
+
+            do {
+                // Create an empty temporary file
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                try Data().write(to: tempURL)
+
+                // Upload the empty file to create it on the remote server
+                try await sshManager.uploadFile(localURL: tempURL, to: filePath)
+
+                // Clean up the temporary file
+                try? FileManager.default.removeItem(at: tempURL)
+
+                // Refresh the directory listing
+                try await sshManager.listFiles(path: sshManager.currentPath)
+            } catch {
+                print("Failed to create file: \(error)")
+                await MainActor.run {
+                    errorMessage = "Failed to create file '\(fileName)': \(error.localizedDescription)"
                     showingErrorAlert = true
                 }
             }
