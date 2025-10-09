@@ -13,6 +13,17 @@ import NIOCore
 import NIOFoundationCompat
 import Logging
 
+enum SSHError: LocalizedError {
+    case connectionFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .connectionFailed(let message):
+            return message
+        }
+    }
+}
+
 enum SFTPError: LocalizedError {
     case operationFailed(String)
 

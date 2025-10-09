@@ -16,5 +16,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [ConnectionFolder.self, SSHConnection.self], inMemory: true)
+        .modelContainer(for: [SSHConnection.self, ConnectionFolder.self], inMemory: true)
 }

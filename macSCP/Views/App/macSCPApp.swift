@@ -12,7 +12,6 @@ import SwiftData
 struct macSCPApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
             SSHConnection.self,
             ConnectionFolder.self,
         ])
