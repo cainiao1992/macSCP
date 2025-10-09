@@ -12,7 +12,6 @@
   <a href="#features">Features</a> •
   <a href="#screenshots">Screenshots</a> •
   <a href="#installation">Installation</a> •
-  <a href="#usage">Usage</a> •
   <a href="#building">Building</a> •
   <a href="#contributing">Contributing</a> •
   <a href="#license">License</a>
@@ -111,31 +110,6 @@ macSCP is a modern, native macOS application built with SwiftUI that provides se
 ### Requirements
 - macOS 13.0 (Ventura) or later
 - SSH access to remote servers
-
-## Usage
-
-### Creating a Connection
-
-1. Click the **+** button in the top-right corner
-2. Fill in your connection details:
-   - **Connection Name**: A friendly name for your server
-   - **Host**: Server IP address or hostname
-   - **Port**: SSH port (default: 22)
-   - **Username**: Your SSH username
-   - **Icon**: Choose an SF Symbol icon (optional)
-   - **Description**: Add notes about this server (optional)
-   - **Tags**: Organize with tags like "production", "database" (optional)
-3. Choose authentication method:
-   - **Password**: Enter your password (optionally save to Keychain)
-   - **SSH Key**: Select your private key file
-4. Click **Create Connection**
-
-### Organizing Connections
-
-- **Create Folders**: Click "New Folder" in the sidebar to organize connections
-- **Drag and Drop**: Drag connections between folders
-- **Filter**: Use the "All" view to see all connections, or select a specific folder
-- **Search**: Type in the search bar to filter connections by name or tags
 
 ## Building
 
