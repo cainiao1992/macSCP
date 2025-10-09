@@ -375,4 +375,62 @@ class CitadelSFTPManager: ObservableObject {
             throw parseSFTPError(error, operation: "rename")
         }
     }
+
+    func copyFile(from sourcePath: String, to destinationPath: String, isDirectory: Bool) async throws {
+        guard let client = client else {
+            throw SSHError.connectionFailed("Not connected")
+        }
+
+        do {
+            // Use cp command to copy files/directories
+            let command = isDirectory ? "cp -r '\(sourcePath)' '\(destinationPath)'" : "cp '\(sourcePath)' '\(destinationPath)'"
+            let result = try await client.executeCommand(command)
+            let output = String(buffer: result)
+
+            // Check for errors
+            if !output.isEmpty {
+                let trimmedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmedOutput.lowercased().contains("permission denied") {
+                    throw SFTPError.operationFailed("Permission denied. You don't have permission to copy at this location.")
+                } else if trimmedOutput.lowercased().contains("no such file") {
+                    throw SFTPError.operationFailed("Source file or folder doesn't exist.")
+                } else if !trimmedOutput.isEmpty {
+                    throw SFTPError.operationFailed("Failed to copy: \(trimmedOutput)")
+                }
+            }
+        } catch let error as SFTPError {
+            throw error
+        } catch {
+            throw parseSFTPError(error, operation: "copy")
+        }
+    }
+
+    func moveFile(from sourcePath: String, to destinationPath: String) async throws {
+        guard let client = client else {
+            throw SSHError.connectionFailed("Not connected")
+        }
+
+        do {
+            // Use mv command to move files/directories
+            let command = "mv '\(sourcePath)' '\(destinationPath)'"
+            let result = try await client.executeCommand(command)
+            let output = String(buffer: result)
+
+            // Check for errors
+            if !output.isEmpty {
+                let trimmedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmedOutput.lowercased().contains("permission denied") {
+                    throw SFTPError.operationFailed("Permission denied. You don't have permission to move at this location.")
+                } else if trimmedOutput.lowercased().contains("no such file") {
+                    throw SFTPError.operationFailed("Source file or folder doesn't exist.")
+                } else if !trimmedOutput.isEmpty {
+                    throw SFTPError.operationFailed("Failed to move: \(trimmedOutput)")
+                }
+            }
+        } catch let error as SFTPError {
+            throw error
+        } catch {
+            throw parseSFTPError(error, operation: "move")
+        }
+    }
 }
