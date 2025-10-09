@@ -169,6 +169,14 @@ struct FinderStyleBrowserView: View {
                                     }) {
                                         Label("Delete", systemImage: "trash")
                                     }
+
+                                    Divider()
+
+                                    Button(action: {
+                                        openFileInfo(file)
+                                    }) {
+                                        Label("Get Info", systemImage: "info.circle")
+                                    }
                                 }
                             }
                             .listStyle(.inset)
@@ -699,6 +707,22 @@ struct FinderStyleBrowserView: View {
 
         // Open editor window
         openWindow(id: "file-editor", value: editorId)
+    }
+
+    private func openFileInfo(_ file: RemoteFile) {
+        // Generate unique ID for this info window instance
+        let infoId = UUID().uuidString
+
+        // Encode file to data
+        guard let fileData = try? JSONEncoder().encode(file) else {
+            return
+        }
+
+        // Store file info in UserDefaults
+        UserDefaults.standard.set(fileData, forKey: "pendingFileInfo_\(infoId)")
+
+        // Open info window
+        openWindow(id: "file-info", value: infoId)
     }
 
     private func downloadFile(_ file: RemoteFile) {

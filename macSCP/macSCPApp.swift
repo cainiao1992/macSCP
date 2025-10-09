@@ -45,5 +45,14 @@ struct macSCPApp: App {
         }
         .modelContainer(sharedModelContainer)
         .defaultSize(width: 1000, height: 700)
+
+        WindowGroup(id: "file-info", for: String.self) { $infoId in
+            if let infoId = infoId {
+                FileInfoContainerView(infoId: infoId)
+            }
+        }
+        .modelContainer(sharedModelContainer)
+        .defaultSize(width: 400, height: 500)
+        .windowResizability(.contentSize)
     }
 }
