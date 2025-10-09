@@ -15,7 +15,12 @@ struct ConnectionListView: View {
     @Query private var folders: [ConnectionFolder]
     @Query private var allConnections: [SSHConnection]
 
-    @State private var selectedFolder: ConnectionFolder?
+    enum SidebarSelection: Hashable {
+        case all
+        case folder(ConnectionFolder)
+    }
+
+    @State private var selection: SidebarSelection? = .all
     @State private var showingNewFolderSheet = false
     @State private var showingNewConnectionSheet = false
     @State private var showingDeleteFolderConfirmation = false
@@ -30,10 +35,15 @@ struct ConnectionListView: View {
         NavigationSplitView {
             // Sidebar with folders
             VStack(spacing: 0) {
-                List(selection: $selectedFolder) {
+                List(selection: $selection) {
+                    // All Connections
+                    NavigationLink(value: SidebarSelection.all) {
+                        Label("All", systemImage: "tray.full.fill")
+                    }
+
                     Section("Folders") {
                         ForEach(folders) { folder in
-                            NavigationLink(value: folder) {
+                            NavigationLink(value: SidebarSelection.folder(folder)) {
                                 Label(folder.name, systemImage: "folder.fill")
                             }
                             .contextMenu {
@@ -57,10 +67,13 @@ struct ConnectionListView: View {
                 .navigationTitle("macSCP")
             }
         } detail: {
-            // Main content showing connections in selected folder
-            if let folder = selectedFolder {
+            // Main content showing connections
+            switch selection {
+            case .all:
+                AllConnectionsView(allConnections: allConnections)
+            case .folder(let folder):
                 FolderContentView(folder: folder)
-            } else {
+            case .none:
                 NoFolderSelectedView(onCreateFolder: { showingNewFolderSheet = true })
             }
         }
@@ -70,7 +83,11 @@ struct ConnectionListView: View {
             })
         }
         .sheet(isPresented: $showingNewConnectionSheet) {
-            NewConnectionSheetView(folder: selectedFolder)
+            if case .folder(let folder) = selection {
+                NewConnectionSheetView(folder: folder)
+            } else {
+                NewConnectionSheetView(folder: nil)
+            }
         }
         .alert("Delete Folder", isPresented: $showingDeleteFolderConfirmation, presenting: folderToDelete) { folder in
             Button("Cancel", role: .cancel) {
@@ -102,7 +119,7 @@ struct ConnectionListView: View {
 
         newFolderName = ""
         showingNewFolderSheet = false
-        selectedFolder = folder
+        selection = .folder(folder)
     }
 
     private func deleteFolder(_ folder: ConnectionFolder) {
@@ -118,8 +135,8 @@ struct ConnectionListView: View {
             modelContext.delete(folder)
 
             // Clear selection if we're deleting the selected folder
-            if selectedFolder?.id == folder.id {
-                selectedFolder = nil
+            if case .folder(let selectedFolder) = selection, selectedFolder.id == folder.id {
+                selection = .all
             }
 
             folderToDelete = nil
