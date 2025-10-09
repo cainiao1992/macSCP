@@ -68,13 +68,14 @@ struct FinderFileRow: View {
                 Button(action: {
                     onNavigate(file.path)
                 }) {
-                    Label("Open", systemImage: "folder.fill")
+                    Text("Open")
                 }
+                .keyboardShortcut(.return, modifiers: [])
 
                 Button(action: {
                     onDownload(file)
                 }) {
-                    Label("Download", systemImage: "arrow.down.circle")
+                    Text("Download Folder")
                 }
 
                 Divider()
@@ -82,13 +83,13 @@ struct FinderFileRow: View {
                 Button(action: {
                     onEdit(file)
                 }) {
-                    Label("Edit", systemImage: "pencil.line")
+                    Text("Edit in Text Editor")
                 }
 
                 Button(action: {
                     onDownload(file)
                 }) {
-                    Label("Download", systemImage: "arrow.down.circle")
+                    Text("Download to Mac")
                 }
                 Divider()
             }
@@ -96,20 +97,23 @@ struct FinderFileRow: View {
             Button(action: {
                 onCopy(file)
             }) {
-                Label("Copy", systemImage: "doc.on.doc")
+                Text("Copy")
             }
+            .keyboardShortcut("c", modifiers: .command)
 
             Button(action: {
                 onCut(file)
             }) {
-                Label("Cut", systemImage: "scissors")
+                Text("Cut")
             }
+            .keyboardShortcut("x", modifiers: .command)
 
             Button(action: {
                 onPaste()
             }) {
-                Label("Paste", systemImage: "doc.on.clipboard")
+                Text("Paste Here")
             }
+            .keyboardShortcut("v", modifiers: .command)
             .disabled(clipboard.isEmpty)
 
             Divider()
@@ -117,22 +121,24 @@ struct FinderFileRow: View {
             Button(action: {
                 onRename(file)
             }) {
-                Label("Rename", systemImage: "pencil")
+                Text("Rename")
             }
 
             Button(role: .destructive, action: {
                 onDelete(file)
             }) {
-                Label("Delete", systemImage: "trash")
+                Text("Delete")
             }
+            .keyboardShortcut(.delete, modifiers: [])
 
             Divider()
 
             Button(action: {
                 onInfo(file)
             }) {
-                Label("Get Info", systemImage: "info.circle")
+                Text("Get Info")
             }
+            .keyboardShortcut("i", modifiers: .command)
         }
     }
 }

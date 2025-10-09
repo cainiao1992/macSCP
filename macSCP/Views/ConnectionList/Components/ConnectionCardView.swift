@@ -71,7 +71,7 @@ struct ConnectionCardView: View {
                         .foregroundColor(.secondary)
                         .frame(width: 14)
 
-                    Text("\(connection.username)@\(connection.host):\(connection.port)")
+                    Text("\(connection.username)@\(connection.host):\(String(connection.port))")
                         .font(.system(size: 11))
                         .foregroundColor(.primary)
                         .lineLimit(1)
