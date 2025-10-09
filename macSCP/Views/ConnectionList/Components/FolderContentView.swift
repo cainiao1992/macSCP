@@ -23,14 +23,6 @@ struct FolderContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            FolderHeaderView(
-                folderName: folder.name,
-                onAddConnection: { showingNewConnectionSheet = true }
-            )
-
-            Divider()
-
             // Connections grid
             if folder.connections.isEmpty {
                 EmptyFolderView(onAddConnection: { showingNewConnectionSheet = true })
@@ -49,6 +41,13 @@ struct FolderContentView: View {
                     },
                     onDelete: deleteConnection
                 )
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button(action: { showingNewConnectionSheet = true }) {
+                    Label("New Connection", systemImage: "plus")
+                }
             }
         }
         .sheet(isPresented: $showingNewConnectionSheet) {
@@ -86,31 +85,6 @@ struct FolderContentView: View {
 
     private func deleteConnection(_ connection: SSHConnection) {
         modelContext.delete(connection)
-    }
-}
-
-// MARK: - Folder Header
-struct FolderHeaderView: View {
-    let folderName: String
-    let onAddConnection: () -> Void
-
-    var body: some View {
-        HStack {
-            Image(systemName: "folder.fill")
-                .foregroundColor(.blue)
-            Text(folderName)
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Spacer()
-
-            Button(action: onAddConnection) {
-                Label("New Connection", systemImage: "plus")
-            }
-            .buttonStyle(.bordered)
-        }
-        .padding()
-        .background(Color(.controlBackgroundColor))
     }
 }
 
@@ -176,7 +150,8 @@ struct ConnectionsGridView: View {
                     }
                 }
             }
-            .padding()
+            .padding(12)
         }
+        .contentMargins(.all, 0, for: .scrollContent)
     }
 }
