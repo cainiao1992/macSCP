@@ -34,23 +34,29 @@ struct FinderFileRow: View {
             HStack(spacing: 12) {
                 FileIcon(file: file, size: 24)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(file.name)
-                        .font(.system(size: 13))
+                Text(file.name)
+                    .font(.system(size: 13))
+                    .lineLimit(1)
 
+                Spacer()
+
+                HStack(spacing: 12) {
                     if !file.isDirectory {
                         Text(file.displaySize)
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
                     }
-                }
 
-                Spacer()
-
-                if file.isDirectory {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                    Text(file.permissions)
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
+                        .monospaced()
+
+                    if file.isDirectory {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
             .padding(.vertical, 2)
