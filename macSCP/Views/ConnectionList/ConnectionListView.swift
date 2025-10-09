@@ -38,13 +38,25 @@ struct ConnectionListView: View {
                 List(selection: $selection) {
                     // All Connections
                     NavigationLink(value: SidebarSelection.all) {
-                        Label("All", systemImage: "tray.full.fill")
+                        HStack {
+                            Label("All", systemImage: "tray.full.fill")
+                            Spacer()
+                            Text("\(allConnections.count)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
 
                     Section("Folders") {
                         ForEach(folders) { folder in
                             NavigationLink(value: SidebarSelection.folder(folder)) {
-                                Label(folder.name, systemImage: "folder.fill")
+                                HStack {
+                                    Label(folder.name, systemImage: "folder.fill")
+                                    Spacer()
+                                    Text("\(folder.connections.count)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                             .contextMenu {
                                 Button(role: .destructive, action: {
