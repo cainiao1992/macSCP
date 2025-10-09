@@ -18,6 +18,8 @@ struct ConnectionListView: View {
     @State private var selectedFolder: ConnectionFolder?
     @State private var showingNewFolderSheet = false
     @State private var showingNewConnectionSheet = false
+    @State private var showingDeleteFolderConfirmation = false
+    @State private var folderToDelete: ConnectionFolder?
     @State private var newFolderName = ""
 
     var unorganizedConnections: [SSHConnection] {
@@ -34,8 +36,15 @@ struct ConnectionListView: View {
                             NavigationLink(value: folder) {
                                 Label(folder.name, systemImage: "folder.fill")
                             }
+                            .contextMenu {
+                                Button(role: .destructive, action: {
+                                    folderToDelete = folder
+                                    showingDeleteFolderConfirmation = true
+                                }) {
+                                    Label("Delete Folder", systemImage: "trash")
+                                }
+                            }
                         }
-                        .onDelete(perform: deleteFolders)
 
                         // Add folder button in the list
                         Button(action: { showingNewFolderSheet = true }) {
@@ -63,6 +72,20 @@ struct ConnectionListView: View {
         .sheet(isPresented: $showingNewConnectionSheet) {
             NewConnectionSheetView(folder: selectedFolder)
         }
+        .alert("Delete Folder", isPresented: $showingDeleteFolderConfirmation, presenting: folderToDelete) { folder in
+            Button("Cancel", role: .cancel) {
+                folderToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                deleteFolder(folder)
+            }
+        } message: { folder in
+            if folder.connections.isEmpty {
+                Text("Are you sure you want to delete '\(folder.name)'?")
+            } else {
+                Text("Are you sure you want to delete '\(folder.name)' and all \(folder.connections.count) connection(s) inside? This action cannot be undone.")
+            }
+        }
     }
 
     private func createFolder() {
@@ -82,11 +105,24 @@ struct ConnectionListView: View {
         selectedFolder = folder
     }
 
-    private func deleteFolders(offsets: IndexSet) {
+    private func deleteFolder(_ folder: ConnectionFolder) {
         withAnimation {
-            for index in offsets {
-                modelContext.delete(folders[index])
+            // Delete all saved passwords for connections in this folder
+            for connection in folder.connections {
+                if connection.shouldSavePassword {
+                    _ = KeychainManager.shared.deletePassword(for: connection.id.uuidString)
+                }
             }
+
+            // Delete the folder (SwiftData will cascade delete connections)
+            modelContext.delete(folder)
+
+            // Clear selection if we're deleting the selected folder
+            if selectedFolder?.id == folder.id {
+                selectedFolder = nil
+            }
+
+            folderToDelete = nil
         }
     }
 }

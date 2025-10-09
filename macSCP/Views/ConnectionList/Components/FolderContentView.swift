@@ -17,6 +17,10 @@ struct FolderContentView: View {
     @State private var showingNewConnectionSheet = false
     @State private var selectedConnection: SSHConnection?
     @State private var showingPasswordPrompt = false
+    @State private var showingEditSheet = false
+    @State private var connectionToEdit: SSHConnection?
+    @State private var showingDeleteConfirmation = false
+    @State private var connectionToDelete: SSHConnection?
     @State private var hoveredConnection: SSHConnection?
     @State private var selectedConnectionId: UUID?
     @State private var hoveredConnectionId: UUID?
@@ -39,7 +43,14 @@ struct FolderContentView: View {
                         selectedConnection = connection
                         handleConnect(connection)
                     },
-                    onDelete: deleteConnection
+                    onEdit: { connection in
+                        connectionToEdit = connection
+                        showingEditSheet = true
+                    },
+                    onDelete: { connection in
+                        connectionToDelete = connection
+                        showingDeleteConfirmation = true
+                    }
                 )
             }
         }
@@ -62,6 +73,21 @@ struct FolderContentView: View {
                     }
                 )
             }
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            if let connection = connectionToEdit {
+                EditConnectionSheetView(connection: connection)
+            }
+        }
+        .alert("Delete Connection", isPresented: $showingDeleteConfirmation, presenting: connectionToDelete) { connection in
+            Button("Cancel", role: .cancel) {
+                connectionToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                deleteConnection(connection)
+            }
+        } message: { connection in
+            Text("Are you sure you want to delete '\(connection.name)'? This action cannot be undone.")
         }
     }
 
@@ -104,7 +130,30 @@ struct FolderContentView: View {
     }
 
     private func deleteConnection(_ connection: SSHConnection) {
-        modelContext.delete(connection)
+        withAnimation {
+            // Delete saved password from keychain if it exists
+            if connection.shouldSavePassword {
+                _ = KeychainManager.shared.deletePassword(for: connection.id.uuidString)
+            }
+
+            // Clear selection if deleting the selected connection
+            if selectedConnectionId == connection.id {
+                selectedConnectionId = nil
+                selectedConnection = nil
+            }
+
+            // Delete the connection
+            modelContext.delete(connection)
+
+            // Save changes immediately
+            do {
+                try modelContext.save()
+            } catch {
+                print("Failed to delete connection: \(error)")
+            }
+
+            connectionToDelete = nil
+        }
     }
 }
 
@@ -115,6 +164,7 @@ struct ConnectionsGridView: View {
     @Binding var hoveredConnectionId: UUID?
     let onSelect: (SSHConnection) -> Void
     let onConnect: (SSHConnection) -> Void
+    let onEdit: (SSHConnection) -> Void
     let onDelete: (SSHConnection) -> Void
 
     var body: some View {
@@ -149,7 +199,7 @@ struct ConnectionsGridView: View {
                         Divider()
 
                         Button(action: {
-                            // Edit connection - you can implement this later
+                            onEdit(connection)
                         }) {
                             Label("Edit Connection", systemImage: "pencil")
                         }

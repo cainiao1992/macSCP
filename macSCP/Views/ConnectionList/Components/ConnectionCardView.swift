@@ -36,9 +36,10 @@ struct ConnectionCardView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "globe")
                         .font(.caption)
-                    Text(connection.host)
+                    Text("\(connection.host):\(connection.port)")
                         .font(.caption)
                         .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
+                        .lineLimit(1)
                 }
 
                 HStack(spacing: 4) {
@@ -47,6 +48,7 @@ struct ConnectionCardView: View {
                     Text(connection.username)
                         .font(.caption)
                         .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
+                        .lineLimit(1)
                 }
             }
         }
