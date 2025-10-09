@@ -47,6 +47,9 @@ struct FolderContentView: View {
                         connectionToEdit = connection
                         showingEditSheet = true
                     },
+                    onDuplicate: { connection in
+                        duplicateConnection(connection)
+                    },
                     onDelete: { connection in
                         connectionToDelete = connection
                         showingDeleteConfirmation = true
@@ -129,6 +132,38 @@ struct FolderContentView: View {
         showingPasswordPrompt = false
     }
 
+    private func duplicateConnection(_ connection: SSHConnection) {
+        withAnimation {
+            // Create a new connection with the same properties
+            let duplicatedConnection = SSHConnection(
+                name: "\(connection.name) Copy",
+                host: connection.host,
+                port: connection.port,
+                username: connection.username,
+                authenticationType: connection.authType,
+                privateKeyPath: connection.privateKeyPath,
+                savePassword: connection.shouldSavePassword,
+                folder: folder
+            )
+
+            modelContext.insert(duplicatedConnection)
+
+            // Copy password from keychain if it exists
+            if connection.shouldSavePassword {
+                if let savedPassword = KeychainManager.shared.getPassword(for: connection.id.uuidString) {
+                    _ = KeychainManager.shared.savePassword(savedPassword, for: duplicatedConnection.id.uuidString)
+                }
+            }
+
+            // Save changes immediately
+            do {
+                try modelContext.save()
+            } catch {
+                print("Failed to duplicate connection: \(error)")
+            }
+        }
+    }
+
     private func deleteConnection(_ connection: SSHConnection) {
         withAnimation {
             // Delete saved password from keychain if it exists
@@ -165,6 +200,7 @@ struct ConnectionsGridView: View {
     let onSelect: (SSHConnection) -> Void
     let onConnect: (SSHConnection) -> Void
     let onEdit: (SSHConnection) -> Void
+    let onDuplicate: (SSHConnection) -> Void
     let onDelete: (SSHConnection) -> Void
 
     var body: some View {
@@ -205,7 +241,7 @@ struct ConnectionsGridView: View {
                         }
 
                         Button(action: {
-                            // Duplicate connection
+                            onDuplicate(connection)
                         }) {
                             Label("Duplicate", systemImage: "doc.on.doc")
                         }
