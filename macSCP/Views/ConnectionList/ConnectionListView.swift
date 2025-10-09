@@ -93,14 +93,24 @@ struct ConnectionListView: View {
             Button("Cancel", role: .cancel) {
                 folderToDelete = nil
             }
-            Button("Delete", role: .destructive) {
-                deleteFolder(folder)
+
+            if !folder.connections.isEmpty {
+                Button("Keep Connections", role: .none) {
+                    deleteFolderOnly(folder)
+                }
+                Button("Delete All", role: .destructive) {
+                    deleteFolderAndConnections(folder)
+                }
+            } else {
+                Button("Delete Folder", role: .destructive) {
+                    deleteFolderOnly(folder)
+                }
             }
         } message: { folder in
             if folder.connections.isEmpty {
                 Text("Are you sure you want to delete '\(folder.name)'?")
             } else {
-                Text("Are you sure you want to delete '\(folder.name)' and all \(folder.connections.count) connection(s) inside? This action cannot be undone.")
+                Text("The folder '\(folder.name)' contains \(folder.connections.count) connection(s). Do you want to keep the connections or delete everything?")
             }
         }
     }
@@ -122,7 +132,26 @@ struct ConnectionListView: View {
         selection = .folder(folder)
     }
 
-    private func deleteFolder(_ folder: ConnectionFolder) {
+    private func deleteFolderOnly(_ folder: ConnectionFolder) {
+        withAnimation {
+            // Move all connections to no folder (unorganized)
+            for connection in folder.connections {
+                connection.folder = nil
+            }
+
+            // Delete just the folder
+            modelContext.delete(folder)
+
+            // Clear selection if we're deleting the selected folder
+            if case .folder(let selectedFolder) = selection, selectedFolder.id == folder.id {
+                selection = .all
+            }
+
+            folderToDelete = nil
+        }
+    }
+
+    private func deleteFolderAndConnections(_ folder: ConnectionFolder) {
         withAnimation {
             // Delete all saved passwords for connections in this folder
             for connection in folder.connections {
