@@ -15,15 +15,16 @@ struct FolderContentView: View {
     @Bindable var folder: ConnectionFolder
 
     @State private var showingNewConnectionSheet = false
-    @State private var selectedConnection: SSHConnection?
+    @State private var selectedConnectionId: UUID?
     @State private var showingPasswordPrompt = false
     @State private var showingEditSheet = false
     @State private var connectionToEdit: SSHConnection?
     @State private var showingDeleteConfirmation = false
     @State private var connectionToDelete: SSHConnection?
-    @State private var hoveredConnection: SSHConnection?
-    @State private var selectedConnectionId: UUID?
-    @State private var hoveredConnectionId: UUID?
+
+    private var selectedConnection: SSHConnection? {
+        folder.connections.first(where: { $0.id == selectedConnectionId })
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,30 +32,60 @@ struct FolderContentView: View {
             if folder.connections.isEmpty {
                 EmptyFolderView(onAddConnection: { showingNewConnectionSheet = true })
             } else {
-                ConnectionsGridView(
-                    connections: folder.connections,
-                    selectedConnectionId: $selectedConnectionId,
-                    hoveredConnectionId: $hoveredConnectionId,
-                    onSelect: { connection in
-                        selectedConnectionId = connection.id
-                        selectedConnection = connection
-                    },
-                    onConnect: { connection in
-                        selectedConnection = connection
-                        handleConnect(connection)
-                    },
-                    onEdit: { connection in
-                        connectionToEdit = connection
-                        showingEditSheet = true
-                    },
-                    onDuplicate: { connection in
-                        duplicateConnection(connection)
-                    },
-                    onDelete: { connection in
-                        connectionToDelete = connection
-                        showingDeleteConfirmation = true
+                ScrollView {
+                    LazyVGrid(columns: [
+                        GridItem(.adaptive(minimum: 320, maximum: 450), spacing: 16)
+                    ], spacing: 16) {
+                        ForEach(folder.connections) { connection in
+                            Button(action: {
+                                selectedConnectionId = connection.id
+                            }) {
+                                ConnectionCardView(
+                                    connection: connection,
+                                    isSelected: selectedConnectionId == connection.id
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .onTapGesture(count: 2) {
+                                handleConnect(connection)
+                            }
+                            .contextMenu {
+                                Button(action: {
+                                    selectedConnectionId = connection.id
+                                    handleConnect(connection)
+                                }) {
+                                    Label("Connect", systemImage: "arrow.right.circle.fill")
+                                }
+
+                                Divider()
+
+                                Button(action: {
+                                    connectionToEdit = connection
+                                    showingEditSheet = true
+                                }) {
+                                    Label("Edit Connection", systemImage: "pencil")
+                                }
+
+                                Button(action: {
+                                    duplicateConnection(connection)
+                                }) {
+                                    Label("Duplicate", systemImage: "doc.on.doc")
+                                }
+
+                                Divider()
+
+                                Button(role: .destructive, action: {
+                                    connectionToDelete = connection
+                                    showingDeleteConfirmation = true
+                                }) {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                        }
                     }
-                )
+                    .padding(16)
+                }
+                .contentMargins(.all, 0, for: .scrollContent)
             }
         }
         .toolbar {
@@ -143,6 +174,9 @@ struct FolderContentView: View {
                 authenticationType: connection.authType,
                 privateKeyPath: connection.privateKeyPath,
                 savePassword: connection.shouldSavePassword,
+                description: connection.displayDescription.isEmpty ? nil : connection.displayDescription,
+                tags: connection.connectionTags.isEmpty ? nil : connection.connectionTags,
+                iconName: connection.iconName,
                 folder: folder
             )
 
@@ -174,7 +208,6 @@ struct FolderContentView: View {
             // Clear selection if deleting the selected connection
             if selectedConnectionId == connection.id {
                 selectedConnectionId = nil
-                selectedConnection = nil
             }
 
             // Delete the connection
@@ -192,72 +225,47 @@ struct FolderContentView: View {
     }
 }
 
-// MARK: - Connections Grid
-struct ConnectionsGridView: View {
-    let connections: [SSHConnection]
-    @Binding var selectedConnectionId: UUID?
-    @Binding var hoveredConnectionId: UUID?
-    let onSelect: (SSHConnection) -> Void
-    let onConnect: (SSHConnection) -> Void
-    let onEdit: (SSHConnection) -> Void
-    let onDuplicate: (SSHConnection) -> Void
-    let onDelete: (SSHConnection) -> Void
+// MARK: - Connection Row
+struct ConnectionRowView: View {
+    let connection: SSHConnection
 
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: [
-                GridItem(.adaptive(minimum: 200, maximum: 250), spacing: 20)
-            ], spacing: 20) {
-                ForEach(connections) { connection in
-                    ConnectionCardView(
-                        connection: connection,
-                        isSelected: selectedConnectionId == connection.id,
-                        isHovered: hoveredConnectionId == connection.id
-                    )
-                    .onTapGesture {
-                        withAnimation(.none) {
-                            onSelect(connection)
-                        }
-                    }
-                    .onTapGesture(count: 2) {
-                        onConnect(connection)
-                    }
-                    .onHover { isHovering in
-                        hoveredConnectionId = isHovering ? connection.id : nil
-                    }
-                    .contextMenu {
-                        Button(action: {
-                            onConnect(connection)
-                        }) {
-                            Label("Connect", systemImage: "arrow.right.circle.fill")
-                        }
+        HStack(spacing: 12) {
+            Image(systemName: connection.displayIcon)
+                .font(.system(size: 20))
+                .foregroundColor(.blue)
+                .frame(width: 24)
 
-                        Divider()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(connection.name)
+                    .font(.body)
 
-                        Button(action: {
-                            onEdit(connection)
-                        }) {
-                            Label("Edit Connection", systemImage: "pencil")
-                        }
+                HStack(spacing: 4) {
+                    Text("\(connection.username)@\(connection.host):\(connection.port)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
 
-                        Button(action: {
-                            onDuplicate(connection)
-                        }) {
-                            Label("Duplicate", systemImage: "doc.on.doc")
-                        }
-
-                        Divider()
-
-                        Button(role: .destructive, action: {
-                            onDelete(connection)
-                        }) {
-                            Label("Delete", systemImage: "trash")
-                        }
+                    if !connection.connectionTags.isEmpty {
+                        Text("•")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(connection.connectionTags.prefix(2).joined(separator: ", "))
+                            .font(.caption)
+                            .foregroundColor(.blue)
                     }
                 }
             }
-            .padding(12)
+
+            Spacer()
+
+            if let folder = connection.folder {
+                Text(folder.name)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.secondary.opacity(0.15)))
+            }
         }
-        .contentMargins(.all, 0, for: .scrollContent)
     }
 }

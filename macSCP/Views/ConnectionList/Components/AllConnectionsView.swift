@@ -15,15 +15,16 @@ struct AllConnectionsView: View {
     let allConnections: [SSHConnection]
 
     @State private var showingNewConnectionSheet = false
-    @State private var selectedConnection: SSHConnection?
+    @State private var selectedConnectionId: UUID?
     @State private var showingPasswordPrompt = false
     @State private var showingEditSheet = false
     @State private var connectionToEdit: SSHConnection?
     @State private var showingDeleteConfirmation = false
     @State private var connectionToDelete: SSHConnection?
-    @State private var hoveredConnection: SSHConnection?
-    @State private var selectedConnectionId: UUID?
-    @State private var hoveredConnectionId: UUID?
+
+    private var selectedConnection: SSHConnection? {
+        allConnections.first(where: { $0.id == selectedConnectionId })
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,30 +32,60 @@ struct AllConnectionsView: View {
             if allConnections.isEmpty {
                 EmptyAllConnectionsView(onAddConnection: { showingNewConnectionSheet = true })
             } else {
-                ConnectionsGridView(
-                    connections: allConnections,
-                    selectedConnectionId: $selectedConnectionId,
-                    hoveredConnectionId: $hoveredConnectionId,
-                    onSelect: { connection in
-                        selectedConnectionId = connection.id
-                        selectedConnection = connection
-                    },
-                    onConnect: { connection in
-                        selectedConnection = connection
-                        handleConnect(connection)
-                    },
-                    onEdit: { connection in
-                        connectionToEdit = connection
-                        showingEditSheet = true
-                    },
-                    onDuplicate: { connection in
-                        duplicateConnection(connection)
-                    },
-                    onDelete: { connection in
-                        connectionToDelete = connection
-                        showingDeleteConfirmation = true
+                ScrollView {
+                    LazyVGrid(columns: [
+                        GridItem(.adaptive(minimum: 320, maximum: 450), spacing: 16)
+                    ], spacing: 16) {
+                        ForEach(allConnections) { connection in
+                            Button(action: {
+                                selectedConnectionId = connection.id
+                            }) {
+                                ConnectionCardView(
+                                    connection: connection,
+                                    isSelected: selectedConnectionId == connection.id
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .onTapGesture(count: 2) {
+                                handleConnect(connection)
+                            }
+                            .contextMenu {
+                                Button(action: {
+                                    selectedConnectionId = connection.id
+                                    handleConnect(connection)
+                                }) {
+                                    Label("Connect", systemImage: "arrow.right.circle.fill")
+                                }
+
+                                Divider()
+
+                                Button(action: {
+                                    connectionToEdit = connection
+                                    showingEditSheet = true
+                                }) {
+                                    Label("Edit Connection", systemImage: "pencil")
+                                }
+
+                                Button(action: {
+                                    duplicateConnection(connection)
+                                }) {
+                                    Label("Duplicate", systemImage: "doc.on.doc")
+                                }
+
+                                Divider()
+
+                                Button(role: .destructive, action: {
+                                    connectionToDelete = connection
+                                    showingDeleteConfirmation = true
+                                }) {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                        }
                     }
-                )
+                    .padding(16)
+                }
+                .contentMargins(.all, 0, for: .scrollContent)
             }
         }
         .toolbar {
@@ -143,6 +174,9 @@ struct AllConnectionsView: View {
                 authenticationType: connection.authType,
                 privateKeyPath: connection.privateKeyPath,
                 savePassword: connection.shouldSavePassword,
+                description: connection.displayDescription.isEmpty ? nil : connection.displayDescription,
+                tags: connection.connectionTags.isEmpty ? nil : connection.connectionTags,
+                iconName: connection.iconName,
                 folder: connection.folder
             )
 
@@ -174,7 +208,6 @@ struct AllConnectionsView: View {
             // Clear selection if deleting the selected connection
             if selectedConnectionId == connection.id {
                 selectedConnectionId = nil
-                selectedConnection = nil
             }
 
             // Delete the connection

@@ -19,6 +19,10 @@ struct EditConnectionSheetView: View {
     @State private var host: String
     @State private var port: String
     @State private var username: String
+    @State private var connectionDescription: String
+    @State private var tagsInput: String
+    @State private var selectedIcon: String
+    @State private var showingIconPicker = false
     @State private var authenticationType: AuthenticationType
     @State private var password = ""
     @State private var savePassword: Bool
@@ -32,6 +36,9 @@ struct EditConnectionSheetView: View {
         _host = State(initialValue: connection.host)
         _port = State(initialValue: String(connection.port))
         _username = State(initialValue: connection.username)
+        _connectionDescription = State(initialValue: connection.displayDescription)
+        _tagsInput = State(initialValue: connection.connectionTags.joined(separator: ", "))
+        _selectedIcon = State(initialValue: connection.displayIcon)
         _authenticationType = State(initialValue: connection.authType)
         _savePassword = State(initialValue: connection.shouldSavePassword)
         _privateKeyPath = State(initialValue: connection.privateKeyPath ?? "")
@@ -103,6 +110,52 @@ struct EditConnectionSheetView: View {
                         .fontWeight(.medium)
                     TextField("e.g., root", text: $username)
                         .textFieldStyle(.roundedBorder)
+                }
+
+                // Icon Picker
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Icon")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+
+                    Button(action: { showingIconPicker.toggle() }) {
+                        HStack {
+                            Image(systemName: selectedIcon)
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                            Text("Choose Icon")
+                                .font(.body)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(8)
+                        .background(Color(.controlBackgroundColor))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // Description
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Description (Optional)")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    TextField("e.g., Production database server", text: $connectionDescription)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                // Tags
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Tags (Optional)")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    TextField("e.g., production, database, critical", text: $tagsInput)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Separate tags with commas")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
 
                 Divider()
@@ -210,16 +263,28 @@ struct EditConnectionSheetView: View {
                 print("File picker error: \(error)")
             }
         }
+        .sheet(isPresented: $showingIconPicker) {
+            IconPickerView(selectedIcon: $selectedIcon)
+        }
     }
 
     private func saveConnection() {
         guard let portNumber = Int(port) else { return }
+
+        // Parse tags from comma-separated input
+        let parsedTags = tagsInput
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
 
         // Update connection properties
         connection.name = connectionName.trimmingCharacters(in: .whitespacesAndNewlines)
         connection.host = host.trimmingCharacters(in: .whitespacesAndNewlines)
         connection.port = portNumber
         connection.username = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        connection.connectionDescription = connectionDescription.isEmpty ? nil : connectionDescription
+        connection.tags = parsedTags.isEmpty ? nil : parsedTags
+        connection.iconName = selectedIcon == "server.rack" ? nil : selectedIcon
         connection.authenticationType = authenticationType
         connection.privateKeyPath = authenticationType == .key ? privateKeyPath : nil
         connection.savePassword = savePassword

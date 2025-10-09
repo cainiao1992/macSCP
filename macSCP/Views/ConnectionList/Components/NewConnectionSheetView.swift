@@ -19,6 +19,10 @@ struct NewConnectionSheetView: View {
     @State private var host = ""
     @State private var port = "22"
     @State private var username = ""
+    @State private var connectionDescription = ""
+    @State private var tagsInput = ""
+    @State private var selectedIcon = "server.rack"
+    @State private var showingIconPicker = false
     @State private var authenticationType: AuthenticationType = .password
     @State private var password = ""
     @State private var savePassword = false
@@ -91,6 +95,52 @@ struct NewConnectionSheetView: View {
                         .fontWeight(.medium)
                     TextField("e.g., root", text: $username)
                         .textFieldStyle(.roundedBorder)
+                }
+
+                //Icon Picker
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Icon")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+
+                    Button(action: { showingIconPicker.toggle() }) {
+                        HStack {
+                            Image(systemName: selectedIcon)
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                            Text("Choose Icon")
+                                .font(.body)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(8)
+                        .background(Color(.controlBackgroundColor))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // Description
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Description (Optional)")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    TextField("e.g., Production database server", text: $connectionDescription)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                // Tags
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Tags (Optional)")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    TextField("e.g., production, database, critical", text: $tagsInput)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Separate tags with commas")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
 
                 Divider()
@@ -187,10 +237,19 @@ struct NewConnectionSheetView: View {
                 print("File picker error: \(error)")
             }
         }
+        .sheet(isPresented: $showingIconPicker) {
+            IconPickerView(selectedIcon: $selectedIcon)
+        }
     }
 
     private func saveConnection() {
         guard let portNumber = Int(port) else { return }
+
+        // Parse tags from comma-separated input
+        let parsedTags = tagsInput
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
 
         let connection = SSHConnection(
             name: connectionName.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -200,6 +259,9 @@ struct NewConnectionSheetView: View {
             authenticationType: authenticationType,
             privateKeyPath: authenticationType == .key ? privateKeyPath : nil,
             savePassword: savePassword && !password.isEmpty,
+            description: connectionDescription.isEmpty ? nil : connectionDescription,
+            tags: parsedTags.isEmpty ? nil : parsedTags,
+            iconName: selectedIcon == "server.rack" ? nil : selectedIcon,
             folder: folder
         )
 
@@ -217,5 +279,61 @@ struct NewConnectionSheetView: View {
         }
 
         dismiss()
+    }
+}
+
+// MARK: - Icon Picker
+struct IconPickerView: View {
+    @Binding var selectedIcon: String
+    @Environment(\.dismiss) private var dismiss
+
+    let icons = [
+        "server.rack", "desktopcomputer", "laptopcomputer", "pc",
+        "network", "wifi", "antenna.radiowaves.left.and.right",
+        "cloud", "cloud.fill", "icloud", "icloud.fill",
+        "externaldrive", "internaldrive", "externaldrive.fill",
+        "cylinder", "cylinder.fill", "cube", "cube.fill",
+        "shippingbox", "shippingbox.fill", "building", "building.2",
+        "lock.shield", "lock.shield.fill", "key.fill"
+    ]
+
+    let columns = [
+        GridItem(.adaptive(minimum: 60), spacing: 12)
+    ]
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Choose an Icon")
+                .font(.title2)
+                .fontWeight(.semibold)
+
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(icons, id: \.self) { icon in
+                        Button(action: {
+                            selectedIcon = icon
+                            dismiss()
+                        }) {
+                            VStack {
+                                Image(systemName: icon)
+                                    .font(.system(size: 30))
+                                    .foregroundColor(selectedIcon == icon ? .white : .blue)
+                                    .frame(width: 60, height: 60)
+                                    .background(selectedIcon == icon ? Color.accentColor : Color(.controlBackgroundColor))
+                                    .cornerRadius(8)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding()
+            }
+
+            Button("Cancel") {
+                dismiss()
+            }
+        }
+        .padding()
+        .frame(width: 400, height: 500)
     }
 }
