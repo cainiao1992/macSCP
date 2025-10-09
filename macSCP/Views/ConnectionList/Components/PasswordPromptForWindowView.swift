@@ -15,26 +15,37 @@ struct PasswordPromptForWindowView: View {
     @State private var password = ""
 
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "lock.shield")
-                .font(.system(size: 50))
-                .foregroundColor(.blue)
+        VStack(spacing: 24) {
+            HStack {
+                Image(systemName: "lock.shield")
+                    .font(.system(size: 40))
+                    .foregroundColor(.blue)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Connect to \(connection.name)")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Connect to \(connection.name)")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Text("\(connection.username)@\(connection.host):\(connection.port)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
 
-                Text("\(connection.username)@\(connection.host):\(connection.port)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Spacer()
             }
 
-            SecureField("Password", text: $password)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 300)
-                .onSubmit {
-                    connect()
-                }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Password")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+
+                SecureField("Enter password", text: $password)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        if !password.isEmpty {
+                            connect()
+                        }
+                    }
+            }
 
             HStack(spacing: 12) {
                 Button("Cancel") {
@@ -42,16 +53,19 @@ struct PasswordPromptForWindowView: View {
                 }
                 .keyboardShortcut(.cancelAction)
 
+                Spacer()
+
                 Button("Connect") {
                     connect()
                 }
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
                 .disabled(password.isEmpty)
             }
             .padding(.top, 8)
         }
         .padding(30)
-        .frame(width: 400, height: 280)
+        .frame(width: 450, height: 260)
     }
 
     private func connect() {
