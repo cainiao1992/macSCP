@@ -117,10 +117,22 @@ struct NewConnectionSheetView: View {
                             .fontWeight(.medium)
                         SecureField("Leave empty to prompt on connect", text: $password)
                             .textFieldStyle(.roundedBorder)
+                            .onChange(of: password) { oldValue, newValue in
+                                // Auto-enable save password when user enters a password
+                                if !newValue.isEmpty && !savePassword {
+                                    savePassword = true
+                                }
+                            }
 
                         Toggle("Save password in Keychain", isOn: $savePassword)
                             .font(.caption)
                             .disabled(password.isEmpty)
+                            .onChange(of: savePassword) { oldValue, newValue in
+                                // Clear password if user unchecks the toggle
+                                if !newValue {
+                                    password = ""
+                                }
+                            }
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 6) {
