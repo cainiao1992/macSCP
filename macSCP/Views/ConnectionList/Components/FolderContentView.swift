@@ -17,7 +17,6 @@ struct FolderContentView: View {
     @State private var showingNewConnectionSheet = false
     @State private var selectedConnectionId: UUID?
     @State private var showingPasswordPrompt = false
-    @State private var showingEditSheet = false
     @State private var connectionToEdit: SSHConnection?
     @State private var showingDeleteConfirmation = false
     @State private var connectionToDelete: SSHConnection?
@@ -61,7 +60,6 @@ struct FolderContentView: View {
 
                                 Button(action: {
                                     connectionToEdit = connection
-                                    showingEditSheet = true
                                 }) {
                                     Label("Edit Connection", systemImage: "pencil")
                                 }
@@ -108,10 +106,8 @@ struct FolderContentView: View {
                 )
             }
         }
-        .sheet(isPresented: $showingEditSheet) {
-            if let connection = connectionToEdit {
-                EditConnectionSheetView(connection: connection)
-            }
+        .sheet(item: $connectionToEdit) { connection in
+            EditConnectionSheetView(connection: connection)
         }
         .alert("Delete Connection", isPresented: $showingDeleteConfirmation, presenting: connectionToDelete) { connection in
             Button("Cancel", role: .cancel) {
