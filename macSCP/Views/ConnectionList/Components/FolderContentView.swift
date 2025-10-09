@@ -37,7 +37,7 @@ struct FolderContentView: View {
                     },
                     onConnect: { connection in
                         selectedConnection = connection
-                        showingPasswordPrompt = true
+                        handleConnect(connection)
                     },
                     onDelete: deleteConnection
                 )
@@ -62,6 +62,26 @@ struct FolderContentView: View {
                     }
                 )
             }
+        }
+    }
+
+    private func handleConnect(_ connection: SSHConnection) {
+        // Check if we have a saved password or using SSH key
+        if connection.authType == .key {
+            // SSH key authentication - no password needed
+            openConnectionWindow(connection: connection, password: "")
+        } else if connection.shouldSavePassword {
+            // Try to get saved password from keychain
+            if let savedPassword = KeychainManager.shared.getPassword(for: connection.id.uuidString) {
+                // Use saved password directly
+                openConnectionWindow(connection: connection, password: savedPassword)
+            } else {
+                // Saved password flag is set but password not found - show prompt
+                showingPasswordPrompt = true
+            }
+        } else {
+            // No saved password - show prompt
+            showingPasswordPrompt = true
         }
     }
 

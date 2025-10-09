@@ -11,16 +11,37 @@ import SwiftData
 @main
 struct macSCPApp: App {
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            SSHConnection.self,
-            ConnectionFolder.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            // Try to create the container with auto-migration
+            let container = try ModelContainer(
+                for: SSHConnection.self, ConnectionFolder.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: false)
+            )
+            return container
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // If migration fails, reset the database
+            print("Failed to create ModelContainer with error: \(error)")
+            print("Attempting to reset database...")
+
+            // Get the default store URL and delete it
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            let bundleID = Bundle.main.bundleIdentifier ?? "com.macSCP"
+            let storeURL = appSupport.appendingPathComponent(bundleID).appendingPathComponent("default.store")
+
+            try? FileManager.default.removeItem(at: storeURL)
+            try? FileManager.default.removeItem(at: storeURL.deletingPathExtension().appendingPathExtension("sqlite-shm"))
+            try? FileManager.default.removeItem(at: storeURL.deletingPathExtension().appendingPathExtension("sqlite-wal"))
+
+            // Try again with a clean slate
+            do {
+                let container = try ModelContainer(
+                    for: SSHConnection.self, ConnectionFolder.self,
+                    configurations: ModelConfiguration(isStoredInMemoryOnly: false)
+                )
+                return container
+            } catch {
+                fatalError("Could not create ModelContainer even after reset: \(error)")
+            }
         }
     }()
 

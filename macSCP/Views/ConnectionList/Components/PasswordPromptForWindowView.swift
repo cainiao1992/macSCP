@@ -13,11 +13,12 @@ struct PasswordPromptForWindowView: View {
     let onConnect: (String) -> Void
 
     @State private var password = ""
+    @State private var hasStoredPassword = false
 
     var body: some View {
         VStack(spacing: 24) {
             HStack {
-                Image(systemName: "lock.shield")
+                Image(systemName: connection.authType == .key ? "key.fill" : "lock.shield")
                     .font(.system(size: 40))
                     .foregroundColor(.blue)
 
@@ -33,18 +34,43 @@ struct PasswordPromptForWindowView: View {
                 Spacer()
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Password")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+            if connection.authType == .password {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Password")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
 
-                SecureField("Enter password", text: $password)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit {
-                        if !password.isEmpty {
-                            connect()
+                        if hasStoredPassword {
+                            Text("(saved)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                     }
+
+                    SecureField(hasStoredPassword ? "Using saved password" : "Enter password", text: $password)
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(hasStoredPassword)
+                        .onSubmit {
+                            if !password.isEmpty || hasStoredPassword {
+                                connect()
+                            }
+                        }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Using SSH key authentication")
+                            .font(.subheadline)
+                    }
+
+                    Text(connection.privateKeyPath ?? "")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
             }
 
             HStack(spacing: 12) {
@@ -60,16 +86,31 @@ struct PasswordPromptForWindowView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
-                .disabled(password.isEmpty)
+                .disabled(connection.authType == .password && password.isEmpty && !hasStoredPassword)
             }
             .padding(.top, 8)
         }
         .padding(30)
         .frame(width: 450, height: 260)
+        .onAppear {
+            loadStoredPassword()
+        }
+    }
+
+    private func loadStoredPassword() {
+        // Only try to load password if authentication type is password and savePassword is true
+        if connection.authType == .password && connection.shouldSavePassword {
+            if let storedPassword = KeychainManager.shared.getPassword(for: connection.id.uuidString) {
+                password = storedPassword
+                hasStoredPassword = true
+            }
+        }
     }
 
     private func connect() {
-        onConnect(password)
+        // For key-based authentication, pass empty string (not used)
+        let authPassword = connection.authType == .key ? "" : password
+        onConnect(authPassword)
         dismiss()
     }
 }
