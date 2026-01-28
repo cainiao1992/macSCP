@@ -10,7 +10,7 @@ import SwiftUI
 
 @main
 struct macSCPApp: App {
-    var sharedModelContainer = DatabaseManager.shared
+    let sharedModelContainer = DatabaseManager.shared
         .createModelContainerWithRecovery()
 
     var body: some Scene {
