@@ -353,7 +353,7 @@ struct FinderStyleBrowserView: View {
         ]
 
         UserDefaults.standard.set(editorInfo, forKey: "pendingEditor_\(editorId)")
-        openWindow(id: "file-editor", value: editorId)
+        openWindow(id: WindowID.fileEditor, value: editorId)
     }
 
     private func openFileInfo(_ file: RemoteFile) {
@@ -361,7 +361,7 @@ struct FinderStyleBrowserView: View {
         guard let fileData = try? JSONEncoder().encode(file) else { return }
 
         UserDefaults.standard.set(fileData, forKey: "pendingFileInfo_\(infoId)")
-        openWindow(id: "file-info", value: infoId)
+        openWindow(id: WindowID.fileInfo, value: infoId)
     }
 }
 

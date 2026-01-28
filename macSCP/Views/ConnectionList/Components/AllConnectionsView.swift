@@ -155,7 +155,7 @@ struct AllConnectionsView: View {
         UserDefaults.standard.set(connectionInfo, forKey: "pendingConnection_\(connection.id.uuidString)")
 
         // Open window immediately
-        openWindow(id: "ssh-explorer", value: connection.id.uuidString)
+        openWindow(id: WindowID.sshExplorer, value: connection.id.uuidString)
         showingPasswordPrompt = false
     }
 

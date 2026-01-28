@@ -10,14 +10,30 @@
 		47384BA32E96FC5200ECB4B5 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = 47384BA22E96FC5200ECB4B5 /* Citadel */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		477B69752F2A5F5900B7EBC3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 47384B6B2E96EB2800ECB4B5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 47384B722E96EB2800ECB4B5;
+			remoteInfo = macSCP;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		47384B732E96EB2800ECB4B5 /* macSCP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = macSCP.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		477B69712F2A5F5900B7EBC3 /* macSCPTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = macSCPTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		47384B752E96EB2800ECB4B5 /* macSCP */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = macSCP;
+			sourceTree = "<group>";
+		};
+		477B69722F2A5F5900B7EBC3 /* macSCPTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = macSCPTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -31,6 +47,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		477B696E2F2A5F5900B7EBC3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -38,6 +61,7 @@
 			isa = PBXGroup;
 			children = (
 				47384B752E96EB2800ECB4B5 /* macSCP */,
+				477B69722F2A5F5900B7EBC3 /* macSCPTests */,
 				47384B742E96EB2800ECB4B5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				47384B732E96EB2800ECB4B5 /* macSCP.app */,
+				477B69712F2A5F5900B7EBC3 /* macSCPTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,6 +101,29 @@
 			productReference = 47384B732E96EB2800ECB4B5 /* macSCP.app */;
 			productType = "com.apple.product-type.application";
 		};
+		477B69702F2A5F5900B7EBC3 /* macSCPTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 477B69772F2A5F5900B7EBC3 /* Build configuration list for PBXNativeTarget "macSCPTests" */;
+			buildPhases = (
+				477B696D2F2A5F5900B7EBC3 /* Sources */,
+				477B696E2F2A5F5900B7EBC3 /* Frameworks */,
+				477B696F2F2A5F5900B7EBC3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				477B69762F2A5F5900B7EBC3 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				477B69722F2A5F5900B7EBC3 /* macSCPTests */,
+			);
+			name = macSCPTests;
+			packageProductDependencies = (
+			);
+			productName = macSCPTests;
+			productReference = 477B69712F2A5F5900B7EBC3 /* macSCPTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -83,11 +131,15 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2600;
+				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					47384B722E96EB2800ECB4B5 = {
 						CreatedOnToolsVersion = 26.0.1;
+					};
+					477B69702F2A5F5900B7EBC3 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 47384B722E96EB2800ECB4B5;
 					};
 				};
 			};
@@ -109,12 +161,20 @@
 			projectRoot = "";
 			targets = (
 				47384B722E96EB2800ECB4B5 /* macSCP */,
+				477B69702F2A5F5900B7EBC3 /* macSCPTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		47384B712E96EB2800ECB4B5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		477B696F2F2A5F5900B7EBC3 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -131,7 +191,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		477B696D2F2A5F5900B7EBC3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		477B69762F2A5F5900B7EBC3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 47384B722E96EB2800ECB4B5 /* macSCP */;
+			targetProxy = 477B69752F2A5F5900B7EBC3 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		47384B7E2E96EB2900ECB4B5 /* Debug */ = {
@@ -336,6 +411,48 @@
 			};
 			name = Release;
 		};
+		477B69782F2A5F5900B7EBC3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NW7K6UFA6P;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = co.macscp.macSCPTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/macSCP.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/macSCP";
+			};
+			name = Debug;
+		};
+		477B69792F2A5F5900B7EBC3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NW7K6UFA6P;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = co.macscp.macSCPTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/macSCP.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/macSCP";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -353,6 +470,15 @@
 			buildConfigurations = (
 				47384B812E96EB2900ECB4B5 /* Debug */,
 				47384B822E96EB2900ECB4B5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		477B69772F2A5F5900B7EBC3 /* Build configuration list for PBXNativeTarget "macSCPTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				477B69782F2A5F5900B7EBC3 /* Debug */,
+				477B69792F2A5F5900B7EBC3 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
