@@ -5,8 +5,8 @@
 //  Created by Nevil Macwan on 09/10/25.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct ContentView: View {
     var body: some View {
@@ -16,5 +16,8 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [SSHConnection.self, ConnectionFolder.self], inMemory: true)
+        .modelContainer(
+            for: [SSHConnection.self, ConnectionFolder.self],
+            inMemory: true
+        )
 }
