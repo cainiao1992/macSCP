@@ -7,4 +7,5 @@
 
 enum AppConstants {
     static let defaultBundleID = "com.macSCP"
+    static let appName = "macSCP"
 }

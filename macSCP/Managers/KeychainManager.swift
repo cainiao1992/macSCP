@@ -8,7 +8,7 @@
 import Foundation
 import Security
 
-class KeychainManager {
+class KeychainManager: KeychainManagerProtocol {
     static let shared = KeychainManager()
 
     private let service = "com.macSCP.ssh"

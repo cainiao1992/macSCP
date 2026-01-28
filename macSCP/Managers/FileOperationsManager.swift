@@ -29,11 +29,11 @@ class FileOperationsManager: ObservableObject {
     // MARK: - Create Operations
 
     func createFolder(name: String) async {
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard !name.isEmptyOrWhitespace else {
             return
         }
 
-        let folderName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let folderName = name.trimmed
         let folderPath = sshManager.currentPath.hasSuffix("/")
             ? "\(sshManager.currentPath)\(folderName)"
             : "\(sshManager.currentPath)/\(folderName)"
@@ -49,11 +49,11 @@ class FileOperationsManager: ObservableObject {
     }
 
     func createFile(name: String) async {
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard !name.isEmptyOrWhitespace else {
             return
         }
 
-        let fileName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fileName = name.trimmed
         let filePath = sshManager.currentPath.hasSuffix("/")
             ? "\(sshManager.currentPath)\(fileName)"
             : "\(sshManager.currentPath)/\(fileName)"
@@ -94,11 +94,11 @@ class FileOperationsManager: ObservableObject {
     // MARK: - Rename Operation
 
     func renameFile(_ file: RemoteFile, newName: String) async {
-        guard !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard !newName.isEmptyOrWhitespace else {
             return
         }
 
-        let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = newName.trimmed
 
         // Build new path
         let pathComponents = file.path.split(separator: "/")

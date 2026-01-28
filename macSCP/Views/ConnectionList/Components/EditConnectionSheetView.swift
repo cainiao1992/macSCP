@@ -45,9 +45,9 @@ struct EditConnectionSheetView: View {
     }
 
     var isFormValid: Bool {
-        !connectionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !connectionName.isEmptyOrWhitespace &&
+        !host.isEmptyOrWhitespace &&
+        !username.isEmptyOrWhitespace &&
         Int(port) != nil &&
         (authenticationType == .password ? true : !privateKeyPath.isEmpty)
     }
@@ -278,10 +278,10 @@ struct EditConnectionSheetView: View {
             .filter { !$0.isEmpty }
 
         // Update connection properties
-        connection.name = connectionName.trimmingCharacters(in: .whitespacesAndNewlines)
-        connection.host = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        connection.name = connectionName.trimmed
+        connection.host = host.trimmed
         connection.port = portNumber
-        connection.username = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        connection.username = username.trimmed
         connection.connectionDescription = connectionDescription.isEmpty ? nil : connectionDescription
         connection.tags = parsedTags.isEmpty ? nil : parsedTags
         connection.iconName = selectedIcon == "server.rack" ? nil : selectedIcon

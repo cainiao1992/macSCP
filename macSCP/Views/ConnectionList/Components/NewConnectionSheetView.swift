@@ -30,9 +30,9 @@ struct NewConnectionSheetView: View {
     @State private var showingFilePicker = false
 
     var isFormValid: Bool {
-        !connectionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !connectionName.isEmptyOrWhitespace &&
+        !host.isEmptyOrWhitespace &&
+        !username.isEmptyOrWhitespace &&
         Int(port) != nil &&
         (authenticationType == .password ? true : !privateKeyPath.isEmpty)
     }
@@ -252,10 +252,10 @@ struct NewConnectionSheetView: View {
             .filter { !$0.isEmpty }
 
         let connection = SSHConnection(
-            name: connectionName.trimmingCharacters(in: .whitespacesAndNewlines),
-            host: host.trimmingCharacters(in: .whitespacesAndNewlines),
+            name: connectionName.trimmed,
+            host: host.trimmed,
             port: portNumber,
-            username: username.trimmingCharacters(in: .whitespacesAndNewlines),
+            username: username.trimmed,
             authenticationType: authenticationType,
             privateKeyPath: authenticationType == .key ? privateKeyPath : nil,
             savePassword: savePassword && !password.isEmpty,

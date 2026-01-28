@@ -351,7 +351,7 @@ class CitadelSFTPManager: ObservableObject {
 
                 // Check for errors in stderr or output
                 if !output.isEmpty {
-                    let trimmedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let trimmedOutput = output.trimmed
                     if trimmedOutput.lowercased().contains("permission denied") {
                         throw SFTPError.operationFailed("Permission denied. You don't have permission to delete at this location.")
                     } else if trimmedOutput.lowercased().contains("no such file") {
@@ -400,7 +400,7 @@ class CitadelSFTPManager: ObservableObject {
 
             // Check for errors
             if !output.isEmpty {
-                let trimmedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedOutput = output.trimmed
                 if trimmedOutput.lowercased().contains("permission denied") {
                     throw SFTPError.operationFailed("Permission denied. You don't have permission to copy at this location.")
                 } else if trimmedOutput.lowercased().contains("no such file") {
@@ -429,7 +429,7 @@ class CitadelSFTPManager: ObservableObject {
 
             // Check for errors
             if !output.isEmpty {
-                let trimmedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedOutput = output.trimmed
                 if trimmedOutput.lowercased().contains("permission denied") {
                     throw SFTPError.operationFailed("Permission denied. You don't have permission to move at this location.")
                 } else if trimmedOutput.lowercased().contains("no such file") {

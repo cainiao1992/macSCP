@@ -39,7 +39,7 @@ struct NewFolderView: View {
                 TextField("e.g., Production Servers", text: $folderName)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit {
-                        if !folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        if !folderName.isEmptyOrWhitespace {
                             onCreate()
                         }
                     }
@@ -58,7 +58,7 @@ struct NewFolderView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
-                .disabled(folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(folderName.isEmptyOrWhitespace)
             }
             .padding(.top, 8)
         }
