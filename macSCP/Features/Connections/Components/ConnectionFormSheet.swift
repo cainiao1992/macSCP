@@ -150,13 +150,7 @@ struct ConnectionFormSheet: View {
                     TextField("Description", text: $description, axis: .vertical)
                         .lineLimit(2...4)
 
-                    Picker("Icon", selection: $iconName) {
-                        Label("Server Rack", systemImage: "server.rack").tag("server.rack")
-                        Label("Desktop", systemImage: "desktopcomputer").tag("desktopcomputer")
-                        Label("Laptop", systemImage: "laptopcomputer").tag("laptopcomputer")
-                        Label("Cloud", systemImage: "cloud").tag("cloud")
-                        Label("Network", systemImage: "network").tag("network")
-                    }
+                    IconPickerRow(selectedIcon: $iconName)
                 }
             }
             .formStyle(.grouped)
@@ -276,6 +270,45 @@ struct ConnectionFormSheet: View {
 
     private func removeTag(_ tag: String) {
         tags.removeAll { $0 == tag }
+    }
+}
+
+// MARK: - Icon Picker Row
+struct IconPickerRow: View {
+    @Binding var selectedIcon: String
+    @State private var showingIconSelector = false
+
+    var body: some View {
+        HStack {
+            Text("Icon")
+            Spacer()
+            Button {
+                showingIconSelector.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: selectedIcon)
+                        .font(.system(size: 16))
+                        .foregroundStyle(.blue)
+                        .frame(width: 28, height: 28)
+                        .background(.blue.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    Text(selectedIcon)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.quaternary.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showingIconSelector, arrowEdge: .trailing) {
+                IconSelectorView(selectedIcon: $selectedIcon)
+            }
+        }
     }
 }
 

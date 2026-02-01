@@ -34,10 +34,10 @@ enum LogLevel {
 
     var prefix: String {
         switch self {
-        case .debug: return "🔍"
-        case .info: return "ℹ️"
-        case .warning: return "⚠️"
-        case .error: return "❌"
+        case .debug: return "[DEBUG]"
+        case .info: return "[INFO]"
+        case .warning: return "[WARNING]"
+        case .error: return "[ERROR]"
         }
     }
 }
