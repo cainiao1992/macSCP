@@ -389,6 +389,33 @@ final class FileBrowserViewModel {
         await loadFiles()
     }
 
+    // MARK: - Drag and Drop
+
+    /// Downloads a file to a specific URL (used for drag-out file promises)
+    func downloadFileToURL(_ file: RemoteFile, destinationURL: URL) async throws {
+        try await fileRepository.download(remotePath: file.path, to: destinationURL)
+        AnalyticsService.track(.fileDownloaded)
+        logInfo("Downloaded via drag: \(file.name)", category: .sftp)
+    }
+
+    /// Uploads files dropped from Finder into the current directory
+    func uploadDroppedFiles(_ urls: [URL]) async {
+        for url in urls {
+            guard url.isFileURL else { continue }
+            let remotePath = currentPath.appendingPathComponent(url.lastPathComponent)
+            do {
+                try await fileRepository.upload(localURL: url, to: remotePath)
+                AnalyticsService.track(.fileUploaded)
+                logInfo("Uploaded via drop: \(url.lastPathComponent)", category: .sftp)
+            } catch {
+                logError("Drop upload failed: \(error)", category: .sftp)
+                self.error = AppError.from(error)
+                return
+            }
+        }
+        await loadFiles()
+    }
+
     // MARK: - File Content
 
     func getFileContent(_ file: RemoteFile) async throws -> String {
