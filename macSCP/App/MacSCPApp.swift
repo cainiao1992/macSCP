@@ -12,6 +12,10 @@ import SwiftData
 struct MacSCPApp: App {
     @StateObject private var container = DependencyContainer.shared
 
+    init() {
+        AnalyticsService.initialize()
+    }
+
     var body: some Scene {
         // Main Window - Connection List
         WindowGroup {

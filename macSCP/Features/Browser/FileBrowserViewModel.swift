@@ -144,6 +144,7 @@ final class FileBrowserViewModel {
             isConnected = true
             currentPath = await sftpSession.currentPath
             navigationService.reset(to: currentPath)
+            AnalyticsService.track(.fileBrowserOpened)
             await loadFiles()
         } catch {
             logError("Connection failed: \(error)", category: .sftp)
@@ -243,6 +244,7 @@ final class FileBrowserViewModel {
         do {
             try await fileRepository.createDirectory(at: path)
             isShowingNewFolderSheet = false
+            AnalyticsService.track(.folderCreatedRemote)
             await loadFiles()
         } catch {
             logError("Failed to create folder: \(error)", category: .sftp)
@@ -270,6 +272,7 @@ final class FileBrowserViewModel {
             try await fileRepository.rename(from: file.path, to: newPath)
             isShowingRenameSheet = false
             fileToRename = nil
+            AnalyticsService.track(.fileRenamed)
             await loadFiles()
         } catch {
             logError("Failed to rename file: \(error)", category: .sftp)
@@ -291,6 +294,7 @@ final class FileBrowserViewModel {
         isShowingDeleteConfirmation = false
         filesToDelete = []
         selectedFiles.removeAll()
+        AnalyticsService.track(.fileDeleted)
         await loadFiles()
     }
 
@@ -352,6 +356,7 @@ final class FileBrowserViewModel {
 
         do {
             try await fileRepository.download(remotePath: file.path, to: url)
+            AnalyticsService.track(.fileDownloaded)
             logInfo("Downloaded: \(file.name)", category: .sftp)
         } catch {
             logError("Download failed: \(error)", category: .sftp)
@@ -372,6 +377,7 @@ final class FileBrowserViewModel {
 
             do {
                 try await fileRepository.upload(localURL: url, to: remotePath)
+                AnalyticsService.track(.fileUploaded)
                 logInfo("Uploaded: \(url.lastPathComponent)", category: .sftp)
             } catch {
                 logError("Upload failed: \(error)", category: .sftp)

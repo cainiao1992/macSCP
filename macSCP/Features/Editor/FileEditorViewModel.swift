@@ -89,6 +89,7 @@ final class FileEditorViewModel {
             try await fileRepository.writeFileContent(content, to: filePath)
             savedContent = content
             state = .success(())
+            AnalyticsService.track(.fileSaved)
             logInfo("File saved: \(fileName)", category: .sftp)
         } catch {
             logError("Failed to save file: \(error)", category: .sftp)

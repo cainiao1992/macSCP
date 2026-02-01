@@ -134,6 +134,7 @@ final class ConnectionListViewModel {
 
             await loadData()
             isShowingNewConnectionSheet = false
+            AnalyticsService.track(.connectionCreated)
             logInfo("Connection saved: \(connection.name)", category: .database)
         } catch {
             logError("Failed to save connection: \(error)", category: .database)
@@ -154,6 +155,7 @@ final class ConnectionListViewModel {
             await loadData()
             isShowingEditConnectionSheet = false
             connectionToEdit = nil
+            AnalyticsService.track(.connectionEdited)
             logInfo("Connection updated: \(connection.name)", category: .database)
         } catch {
             logError("Failed to update connection: \(error)", category: .database)
@@ -166,6 +168,7 @@ final class ConnectionListViewModel {
             try await connectionRepository.delete(id: connection.id)
             try? keychainService.deletePassword(for: connection.id)
             await loadData()
+            AnalyticsService.track(.connectionDeleted)
             logInfo("Connection deleted: \(connection.name)", category: .database)
         } catch {
             logError("Failed to delete connection: \(error)", category: .database)
@@ -202,6 +205,7 @@ final class ConnectionListViewModel {
             try await folderRepository.save(folder)
             await loadData()
             isShowingNewFolderSheet = false
+            AnalyticsService.track(.folderCreated)
             logInfo("Folder created: \(name)", category: .database)
         } catch {
             logError("Failed to create folder: \(error)", category: .database)
@@ -232,6 +236,7 @@ final class ConnectionListViewModel {
             await loadData()
             isShowingDeleteFolderAlert = false
             folderToDelete = nil
+            AnalyticsService.track(.folderDeleted)
             logInfo("Folder deleted: \(folder.name)", category: .database)
         } catch {
             logError("Failed to delete folder: \(error)", category: .database)
@@ -282,6 +287,7 @@ final class ConnectionListViewModel {
         let windowId = windowManager.storeFileBrowserData(data)
         logInfo("Stored window data with ID: \(windowId)", category: .ui)
         pendingWindowId = windowId
+        AnalyticsService.track(.connectionConnected)
         logInfo("Set pendingWindowId to: \(windowId)", category: .ui)
     }
 
