@@ -5,7 +5,7 @@
 <h1 align="center">macSCP</h1>
 
 <p align="center">
-  <strong>A native macOS SSH/SFTP client with an elegant interface</strong>
+  <strong>A native macOS file transfer client for SFTP and S3 with an elegant interface</strong>
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
 
 ## Overview
 
-macSCP is a modern, native macOS application built with SwiftUI that provides seamless SSH/SFTP file management capabilities. With its intuitive interface and powerful features, macSCP makes managing remote servers as easy as working with local files.
+macSCP is a modern, native macOS application built with SwiftUI that provides seamless file management for SFTP servers and Amazon S3 storage. With its intuitive interface and powerful features, macSCP makes managing remote servers and cloud storage as easy as working with local files.
 
 ## Features
 
@@ -30,6 +30,13 @@ macSCP is a modern, native macOS application built with SwiftUI that provides se
 - **Keychain Integration**: Securely store passwords in macOS Keychain
 - **SSH Key Support**: Use your existing SSH private keys for authentication
 - **Connection Profiles**: Save and organize multiple server connections with custom icons and descriptions
+
+### ☁️ **Amazon S3 Support**
+- **S3 & S3-Compatible Storage**: Connect to Amazon S3, MinIO, DigitalOcean Spaces, and other S3-compatible services
+- **Bucket Browser**: Browse and manage S3 buckets with the same familiar interface
+- **Access Key Authentication**: Secure authentication using AWS access keys
+- **Region Support**: Connect to any AWS region or custom endpoints
+- **Full File Operations**: Upload, download, delete, and manage objects in S3 buckets
 
 ### 📁 **Advanced File Management**
 - **Full File Browser**: Navigate remote file systems with an intuitive Finder-like interface
@@ -109,7 +116,8 @@ macSCP is a modern, native macOS application built with SwiftUI that provides se
 
 ### Requirements
 - macOS 13.0 (Ventura) or later
-- SSH access to remote servers
+- For SFTP: SSH access to remote servers
+- For S3: AWS access key and secret key (or S3-compatible credentials)
 
 ## Building
 
@@ -122,8 +130,9 @@ macSCP is a modern, native macOS application built with SwiftUI that provides se
 ### Dependencies
 
 macSCP uses Swift Package Manager for dependency management. Required packages:
-- [Citadel](https://github.com/Joannis/Citadel) - SSH/SFTP implementation
-- SwiftNIO - High-performance networking
+- [Citadel](https://github.com/Orlandos-nl/Citadel) - SSH/SFTP implementation
+- [Soto](https://github.com/soto-project/soto) - AWS SDK for Swift (S3 support)
+- [SwiftNIO](https://github.com/apple/swift-nio) - High-performance networking
 
 ### Build Instructions
 
@@ -170,19 +179,25 @@ macSCP is built with modern Swift and SwiftUI patterns:
 - **SwiftData**: Model persistence and data management
 - **Combine**: Reactive state management
 - **Citadel**: SSH/SFTP protocol implementation
+- **Soto**: AWS S3 protocol implementation
 - **SwiftNIO**: Non-blocking I/O for network operations
 - **MVVM Pattern**: Clean separation of concerns
 - **Async/Await**: Modern concurrency for smooth performance
 
 ### Key Components
 
-- **Models**: `SSHConnection`, `ConnectionFolder`, `RemoteFile`
-- **Managers**:
-  - `CitadelSFTPManager` - SFTP operations
-  - `FileOperationsManager` - File operations
-  - `KeychainManager` - Secure password storage
-  - `RemoteClipboard` - Clipboard operations
-  - `NavigationManager` - Window management
+- **Models**: `Connection`, `ConnectionFolder`, `RemoteFile`, `S3Credentials`
+- **Sessions**:
+  - `SFTPSession` - SFTP protocol operations
+  - `S3Session` - AWS S3 protocol operations
+- **Repositories**:
+  - `FileRepository` - SFTP file operations
+  - `S3FileRepository` - S3 file operations
+  - `ConnectionRepository` - Connection management
+- **Services**:
+  - `KeychainService` - Secure credential storage
+  - `ClipboardService` - Clipboard operations
+  - `WindowManager` - Window management
 - **Views**: Modular SwiftUI views for each feature
 
 ## Contributing
@@ -207,10 +222,11 @@ Contributions are welcome! Here's how you can help:
 
 macSCP takes security seriously:
 
-- Passwords are stored securely in macOS Keychain
+- Passwords and AWS credentials are stored securely in macOS Keychain
 - SSH keys are never copied or stored
-- All connections use SSH protocol encryption
-- No telemetry or tracking
+- All SFTP connections use SSH protocol encryption
+- All S3 connections use HTTPS encryption
+- Privacy-focused telemetry via TelemetryDeck (no personal data collected)
 - All code is open source for transparency
 
 
@@ -218,7 +234,6 @@ macSCP takes security seriously:
 
 Future features under consideration:
 
-- [ ] SFTP protocol improvements
 - [ ] Terminal emulator integration
 - [ ] Port forwarding support
 - [ ] File synchronization
@@ -231,11 +246,17 @@ Future features under consideration:
 
 ## Troubleshooting
 
-### Connection Issues
+### SFTP Connection Issues
 
 - **Can't connect**: Verify host, port, username, and credentials
 - **Authentication failed**: Check password or SSH key permissions
 - **Timeout**: Check firewall settings and network connectivity
+
+### S3 Connection Issues
+
+- **Access Denied**: Verify your access key and secret key are correct
+- **Bucket not found**: Check the bucket name and region settings
+- **Invalid credentials**: Ensure IAM user has S3 permissions (s3:ListBucket, s3:GetObject, s3:PutObject)
 
 ### File Operations
 
@@ -254,7 +275,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- Built with [Citadel](https://github.com/Joannis/Citadel) by Joannis Orlandos
+- Built with [Citadel](https://github.com/Orlandos-nl/Citadel) by Joannis Orlandos
+- S3 support powered by [Soto](https://github.com/soto-project/soto)
 - Uses [SwiftNIO](https://github.com/apple/swift-nio) by Apple
 - Icons from SF Symbols by Apple
 - Inspired by classic SCP clients and modern macOS design
