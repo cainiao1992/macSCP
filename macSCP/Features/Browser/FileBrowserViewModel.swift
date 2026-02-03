@@ -188,7 +188,7 @@ final class FileBrowserViewModel {
                 isConnected = true
                 currentPath = await s3Session.currentPath
                 navigationService.reset(to: currentPath)
-                AnalyticsService.track(.fileBrowserOpened)
+                AnalyticsService.trackFileBrowserOpened(protocol: .init(from: connection.connectionType))
                 await loadFiles()
             } else {
                 // SFTP connection
@@ -214,7 +214,7 @@ final class FileBrowserViewModel {
                 isConnected = true
                 currentPath = await sftpSession.currentPath
                 navigationService.reset(to: currentPath)
-                AnalyticsService.track(.fileBrowserOpened)
+                AnalyticsService.trackFileBrowserOpened(protocol: .init(from: connection.connectionType))
                 await loadFiles()
             }
         } catch {
@@ -331,7 +331,7 @@ final class FileBrowserViewModel {
         do {
             try await fileRepository.createDirectory(at: path)
             isShowingNewFolderSheet = false
-            AnalyticsService.track(.folderCreatedRemote)
+            AnalyticsService.trackFileOperation(.createFolder, protocol: .init(from: connection.connectionType))
             await loadFiles()
         } catch {
             logError("Failed to create folder: \(error)", category: .sftp)
@@ -359,7 +359,7 @@ final class FileBrowserViewModel {
             try await fileRepository.rename(from: file.path, to: newPath)
             isShowingRenameSheet = false
             fileToRename = nil
-            AnalyticsService.track(.fileRenamed)
+            AnalyticsService.trackFileOperation(.rename, protocol: .init(from: connection.connectionType))
             await loadFiles()
         } catch {
             logError("Failed to rename file: \(error)", category: .sftp)
@@ -381,7 +381,7 @@ final class FileBrowserViewModel {
         isShowingDeleteConfirmation = false
         filesToDelete = []
         selectedFiles.removeAll()
-        AnalyticsService.track(.fileDeleted)
+        AnalyticsService.trackFileOperation(.delete, protocol: .init(from: connection.connectionType), count: files.count)
         await loadFiles()
     }
 
@@ -443,8 +443,8 @@ final class FileBrowserViewModel {
 
         do {
             try await fileRepository.download(remotePath: file.path, to: url)
-            AnalyticsService.track(.fileDownloaded)
-            logInfo("Downloaded: \(file.name)", category: .sftp)
+            AnalyticsService.trackFileDownloaded(protocol: .init(from: connection.connectionType), fileCount: 1, totalBytes: file.size)
+            logInfo("Downloaded: \(file.name)", category: connection.connectionType == .s3 ? .s3 : .sftp)
         } catch {
             logError("Download failed: \(error)", category: .sftp)
             self.error = AppError.from(error)
@@ -521,7 +521,7 @@ final class FileBrowserViewModel {
                         self.transferTasks.removeValue(forKey: transferId)
                     }
 
-                    AnalyticsService.track(.fileUploaded)
+                    AnalyticsService.trackFileUploaded(protocol: .init(from: self.connection.connectionType), fileCount: 1, totalBytes: fileSize)
                     logInfo("Uploaded: \(url.lastPathComponent)", category: self.connection.connectionType == .s3 ? .s3 : .sftp)
 
                 } catch {
@@ -602,8 +602,8 @@ final class FileBrowserViewModel {
     /// Downloads a file to a specific URL (used for drag-out file promises)
     func downloadFileToURL(_ file: RemoteFile, destinationURL: URL) async throws {
         try await fileRepository.download(remotePath: file.path, to: destinationURL)
-        AnalyticsService.track(.fileDownloaded)
-        logInfo("Downloaded via drag: \(file.name)", category: .sftp)
+        AnalyticsService.trackFileDownloaded(protocol: .init(from: connection.connectionType), fileCount: 1, totalBytes: file.size)
+        logInfo("Downloaded via drag: \(file.name)", category: connection.connectionType == .s3 ? .s3 : .sftp)
     }
 
     /// Uploads files dropped from Finder into the current directory
@@ -672,6 +672,7 @@ final class FileBrowserViewModel {
         )
         let windowId = WindowManager.shared.storeFileInfoData(data)
         pendingFileInfoWindowId = windowId
+        AnalyticsService.track(.fileInfoOpened)
     }
 
     func clearPendingFileInfoWindow() {
@@ -697,6 +698,7 @@ final class FileBrowserViewModel {
         )
         let windowId = WindowManager.shared.storeFileEditorData(data)
         pendingEditorWindowId = windowId
+        AnalyticsService.trackEditorOpened(fileExtension: (file.name as NSString).pathExtension)
     }
 
     func clearPendingEditorWindow() {

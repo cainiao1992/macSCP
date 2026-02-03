@@ -17,6 +17,12 @@
   <a href="#license">License</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/macnev2013/macSCP/releases"><img src="https://img.shields.io/github/v/release/macnev2013/macSCP" alt="Release"/></a>
+  <a href="https://github.com/macnev2013/macSCP/releases"><img src="https://img.shields.io/github/downloads/macnev2013/macSCP/total" alt="Downloads"/></a>
+  <a href="https://github.com/macnev2013/macSCP/stargazers"><img src="https://img.shields.io/github/stars/macnev2013/macSCP?style=social" alt="Stars"/></a>
+</p>
+
 ---
 
 ## Overview
@@ -285,9 +291,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Issues**: [GitHub Issues](https://github.com/macnev2013/macSCP/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/macnev2013/macSCP/discussions)
-- **Email**: support@yourcompany.com
 
 ---
+
+<p align="center">
+  If you find macSCP useful, please consider giving it a <a href="https://github.com/macnev2013/macSCP">star on GitHub</a>!
+</p>
 
 <p align="center">
   Made with ❤️ for the macOS community

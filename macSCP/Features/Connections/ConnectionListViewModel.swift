@@ -143,7 +143,7 @@ final class ConnectionListViewModel {
 
             await loadData()
             isShowingNewConnectionSheet = false
-            AnalyticsService.track(.connectionCreated)
+            AnalyticsService.trackConnectionCreated(protocol: .init(from: connection.connectionType))
             logInfo("Connection saved: \(connection.name)", category: .database)
         } catch {
             logError("Failed to save connection: \(error)", category: .database)
@@ -176,7 +176,9 @@ final class ConnectionListViewModel {
             await loadData()
             isShowingEditConnectionSheet = false
             connectionToEdit = nil
-            AnalyticsService.track(.connectionEdited)
+            AnalyticsService.track(.connectionEdited, with: [
+                "protocol": AnalyticsService.ConnectionProtocol(from: connection.connectionType).rawValue
+            ])
             logInfo("Connection updated: \(connection.name)", category: .database)
         } catch {
             logError("Failed to update connection: \(error)", category: .database)
@@ -194,7 +196,9 @@ final class ConnectionListViewModel {
                 try? keychainService.deletePassword(for: connection.id)
             }
             await loadData()
-            AnalyticsService.track(.connectionDeleted)
+            AnalyticsService.track(.connectionDeleted, with: [
+                "protocol": AnalyticsService.ConnectionProtocol(from: connection.connectionType).rawValue
+            ])
             logInfo("Connection deleted: \(connection.name)", category: .database)
         } catch {
             logError("Failed to delete connection: \(error)", category: .database)
@@ -329,7 +333,7 @@ final class ConnectionListViewModel {
         let windowId = windowManager.storeFileBrowserData(data)
         logInfo("Stored window data with ID: \(windowId)", category: .ui)
         pendingWindowId = windowId
-        AnalyticsService.track(.connectionConnected)
+        AnalyticsService.trackConnectionConnected(protocol: .init(from: connection.connectionType), success: true)
         logInfo("Set pendingWindowId to: \(windowId)", category: .ui)
     }
 

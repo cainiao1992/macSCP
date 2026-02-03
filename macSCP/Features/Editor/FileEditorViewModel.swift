@@ -107,8 +107,8 @@ final class FileEditorViewModel {
             try await fileRepository.writeFileContent(content, to: filePath)
             savedContent = content
             state = .success(())
-            AnalyticsService.track(.fileSaved)
-            logInfo("File saved: \(fileName)", category: .sftp)
+            AnalyticsService.trackFileSaved(fileExtension: (fileName as NSString).pathExtension)
+            logInfo("File saved: \(fileName)", category: s3Session != nil ? .s3 : .sftp)
         } catch {
             logError("Failed to save file: \(error)", category: .sftp)
             state = .error(AppError.from(error))
