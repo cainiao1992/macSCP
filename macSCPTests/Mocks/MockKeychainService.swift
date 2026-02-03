@@ -15,6 +15,11 @@ final class MockKeychainService: KeychainServiceProtocol, @unchecked Sendable {
     var deletePasswordCalled = false
     var updatePasswordCalled = false
     var hasPasswordCalled = false
+    var saveS3CredentialsCalled = false
+    var getS3CredentialsCalled = false
+    var deleteS3CredentialsCalled = false
+    var updateS3CredentialsCalled = false
+    var hasS3CredentialsCalled = false
 
     // MARK: - Recorded Parameters
     var lastSavedPassword: String?
@@ -27,6 +32,7 @@ final class MockKeychainService: KeychainServiceProtocol, @unchecked Sendable {
 
     // MARK: - Mock Responses
     var mockPasswords: [UUID: String] = [:]
+    var mockS3Credentials: [UUID: S3Credentials] = [:]
     var mockError: Error?
 
     // MARK: - Protocol Implementation
@@ -66,6 +72,36 @@ final class MockKeychainService: KeychainServiceProtocol, @unchecked Sendable {
         return mockPasswords[connectionId] != nil
     }
 
+    // MARK: - S3 Credentials
+
+    func saveS3Credentials(_ credentials: S3Credentials, for connectionId: UUID) throws {
+        saveS3CredentialsCalled = true
+        if let error = mockError { throw error }
+        mockS3Credentials[connectionId] = credentials
+    }
+
+    func getS3Credentials(for connectionId: UUID) -> S3Credentials? {
+        getS3CredentialsCalled = true
+        return mockS3Credentials[connectionId]
+    }
+
+    func deleteS3Credentials(for connectionId: UUID) throws {
+        deleteS3CredentialsCalled = true
+        if let error = mockError { throw error }
+        mockS3Credentials.removeValue(forKey: connectionId)
+    }
+
+    func updateS3Credentials(_ credentials: S3Credentials, for connectionId: UUID) throws {
+        updateS3CredentialsCalled = true
+        if let error = mockError { throw error }
+        mockS3Credentials[connectionId] = credentials
+    }
+
+    func hasS3Credentials(for connectionId: UUID) -> Bool {
+        hasS3CredentialsCalled = true
+        return mockS3Credentials[connectionId] != nil
+    }
+
     // MARK: - Reset
     func reset() {
         savePasswordCalled = false
@@ -83,6 +119,13 @@ final class MockKeychainService: KeychainServiceProtocol, @unchecked Sendable {
         lastHasPasswordConnectionId = nil
 
         mockPasswords = [:]
+        mockS3Credentials = [:]
         mockError = nil
+
+        saveS3CredentialsCalled = false
+        getS3CredentialsCalled = false
+        deleteS3CredentialsCalled = false
+        updateS3CredentialsCalled = false
+        hasS3CredentialsCalled = false
     }
 }

@@ -25,6 +25,10 @@ struct BrowserToolbar: View {
 
             Spacer()
 
+            // Transfers button
+            TransfersToolbarButton(viewModel: viewModel)
+                .padding(.trailing, 4)
+
             // View options
             viewOptions
                 .padding(.horizontal, 12)

@@ -98,6 +98,11 @@ struct FileBrowserView: View {
             Text("Are you sure you want to delete \(count) item\(count == 1 ? "" : "s")? This cannot be undone.")
         }
         .errorAlert($viewModel.error)
+        .onDisappear {
+            Task {
+                await viewModel.disconnect()
+            }
+        }
         .onChange(of: viewModel.pendingFileInfoWindowId) { _, windowId in
             if let windowId = windowId {
                 openWindow(id: WindowID.fileInfo, value: windowId)
@@ -167,8 +172,13 @@ struct FileBrowserView: View {
 
             Spacer()
 
+            // Active transfers indicator (clicking opens the popover)
+            if viewModel.hasActiveTransfers {
+                ActiveTransfersIndicator(viewModel: viewModel)
+            }
+
             // Clipboard status
-            if viewModel.hasClipboardItems {
+            if viewModel.hasClipboardItems && !viewModel.hasActiveTransfers {
                 ClipboardStatusView(displayText: viewModel.clipboardDisplayText)
             }
 
@@ -235,6 +245,51 @@ struct ClipboardStatusView: View {
                         .strokeBorder(.blue.opacity(0.2), lineWidth: 1)
                 }
         }
+    }
+}
+
+// MARK: - Active Transfers Indicator
+struct ActiveTransfersIndicator: View {
+    @Bindable var viewModel: FileBrowserViewModel
+
+    var body: some View {
+        Button {
+            viewModel.isShowingTransfersPopover = true
+        } label: {
+            HStack(spacing: 8) {
+                // Upload icon with animation
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.blue)
+                    .symbolEffect(.pulse, options: .repeating)
+
+                // Transfer count and overall progress
+                Text("Uploading \(viewModel.activeTransferCount) file\(viewModel.activeTransferCount == 1 ? "" : "s")")
+                    .font(.system(size: 11, weight: .medium))
+
+                // Overall progress bar
+                ProgressView(value: viewModel.overallProgress)
+                    .progressViewStyle(.linear)
+                    .frame(width: 60)
+
+                // Percentage
+                Text("\(Int(viewModel.overallProgress * 100))%")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, alignment: .trailing)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background {
+                Capsule()
+                    .fill(.blue.opacity(0.1))
+                    .overlay {
+                        Capsule()
+                            .strokeBorder(.blue.opacity(0.3), lineWidth: 1)
+                    }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 

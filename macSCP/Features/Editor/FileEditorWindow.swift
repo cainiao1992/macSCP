@@ -50,6 +50,11 @@ struct FileEditorWindow: View {
             }
         }
         .frame(minWidth: WindowSize.fileEditor.width, minHeight: WindowSize.fileEditor.height)
+        .onDisappear {
+            Task {
+                await viewModel?.cleanup()
+            }
+        }
     }
 
     @MainActor
@@ -63,38 +68,58 @@ struct FileEditorWindow: View {
         }
 
         let container = DependencyContainer.shared
-        let sftpSession = container.makeSFTPSession()
 
-        // Connect the session before creating the file repository
         do {
-            switch data.authMethod {
-            case .password:
-                try await sftpSession.connect(
-                    host: data.host,
-                    port: data.port,
-                    username: data.username,
-                    password: data.password
-                )
-            case .privateKey:
-                try await sftpSession.connect(
-                    host: data.host,
-                    port: data.port,
-                    username: data.username,
-                    privateKeyPath: data.privateKeyPath ?? "",
-                    passphrase: data.password.isEmpty ? nil : data.password
-                )
-            }
+            let fileRepository: FileRepositoryProtocol
+            var s3Session: S3SessionProtocol?
+            var sftpSession: SFTPSessionProtocol?
 
-            let fileRepository = container.makeFileRepository(session: sftpSession)
+            if data.connectionType == .s3 {
+                // S3 connection
+                let session = container.makeS3Session()
+                try await session.connect(
+                    accessKeyId: data.username,
+                    secretAccessKey: data.password,
+                    region: data.s3Region ?? "us-east-1",
+                    bucket: data.s3Bucket ?? "",
+                    endpoint: data.s3Endpoint
+                )
+                fileRepository = container.makeS3FileRepository(session: session)
+                s3Session = session
+            } else {
+                // SFTP connection
+                let session = container.makeSFTPSession()
+                switch data.authMethod {
+                case .password:
+                    try await session.connect(
+                        host: data.host,
+                        port: data.port,
+                        username: data.username,
+                        password: data.password
+                    )
+                case .privateKey:
+                    try await session.connect(
+                        host: data.host,
+                        port: data.port,
+                        username: data.username,
+                        privateKeyPath: data.privateKeyPath ?? "",
+                        passphrase: data.password.isEmpty ? nil : data.password
+                    )
+                }
+                fileRepository = container.makeFileRepository(session: session)
+                sftpSession = session
+            }
 
             viewModel = FileEditorViewModel(
                 filePath: data.filePath,
                 fileName: data.fileName,
                 initialContent: data.content,
-                fileRepository: fileRepository
+                fileRepository: fileRepository,
+                s3Session: s3Session,
+                sftpSession: sftpSession
             )
         } catch {
-            logError("Failed to connect for editor: \(error)", category: .sftp)
+            logError("Failed to connect for editor: \(error)", category: data.connectionType == .s3 ? .s3 : .sftp)
             connectionError = AppError.from(error)
         }
     }

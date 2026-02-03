@@ -130,6 +130,11 @@ actor MockSFTPSession: SFTPSessionProtocol {
         if let error = mockError { throw error }
     }
 
+    func uploadFile(from localURL: URL, to remotePath: String, progress: TransferProgressHandler?) async throws {
+        uploadFileCalled = true
+        if let error = mockError { throw error }
+    }
+
     func readFileContent(at path: String) async throws -> String {
         readFileContentCalled = true
         if let error = mockError { throw error }

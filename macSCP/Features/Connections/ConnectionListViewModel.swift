@@ -129,7 +129,16 @@ final class ConnectionListViewModel {
             try await connectionRepository.save(connection)
 
             if connection.savePassword, let password = password, !password.isEmpty {
-                try keychainService.savePassword(password, for: connection.id)
+                if connection.connectionType == .s3 {
+                    // For S3, store credentials (username is access key, password is secret)
+                    let credentials = S3Credentials(
+                        accessKeyId: connection.username,
+                        secretAccessKey: password
+                    )
+                    try keychainService.saveS3Credentials(credentials, for: connection.id)
+                } else {
+                    try keychainService.savePassword(password, for: connection.id)
+                }
             }
 
             await loadData()
@@ -147,9 +156,21 @@ final class ConnectionListViewModel {
             try await connectionRepository.update(connection)
 
             if connection.savePassword, let password = password, !password.isEmpty {
-                try keychainService.updatePassword(password, for: connection.id)
+                if connection.connectionType == .s3 {
+                    let credentials = S3Credentials(
+                        accessKeyId: connection.username,
+                        secretAccessKey: password
+                    )
+                    try keychainService.updateS3Credentials(credentials, for: connection.id)
+                } else {
+                    try keychainService.updatePassword(password, for: connection.id)
+                }
             } else if !connection.savePassword {
-                try? keychainService.deletePassword(for: connection.id)
+                if connection.connectionType == .s3 {
+                    try? keychainService.deleteS3Credentials(for: connection.id)
+                } else {
+                    try? keychainService.deletePassword(for: connection.id)
+                }
             }
 
             await loadData()
@@ -166,7 +187,12 @@ final class ConnectionListViewModel {
     func deleteConnection(_ connection: Connection) async {
         do {
             try await connectionRepository.delete(id: connection.id)
-            try? keychainService.deletePassword(for: connection.id)
+            // Delete credentials based on connection type
+            if connection.connectionType == .s3 {
+                try? keychainService.deleteS3Credentials(for: connection.id)
+            } else {
+                try? keychainService.deletePassword(for: connection.id)
+            }
             await loadData()
             AnalyticsService.track(.connectionDeleted)
             logInfo("Connection deleted: \(connection.name)", category: .database)
@@ -250,13 +276,24 @@ final class ConnectionListViewModel {
         logInfo("Connect requested for: \(connection.name)", category: .ui)
         connectionToConnect = connection
 
-        // Check if we have a saved password
-        if let savedPassword = keychainService.getPassword(for: connection.id) {
-            logInfo("Found saved password, opening browser", category: .ui)
-            openFileBrowser(for: connection, password: savedPassword)
+        if connection.connectionType == .s3 {
+            // For S3, check for saved credentials
+            if let credentials = keychainService.getS3Credentials(for: connection.id) {
+                logInfo("Found saved S3 credentials, opening browser", category: .ui)
+                openFileBrowser(for: connection, password: credentials.secretAccessKey)
+            } else {
+                logInfo("No saved S3 credentials, showing prompt", category: .ui)
+                isShowingPasswordPrompt = true
+            }
         } else {
-            logInfo("No saved password, showing prompt", category: .ui)
-            isShowingPasswordPrompt = true
+            // For SFTP, check for saved password
+            if let savedPassword = keychainService.getPassword(for: connection.id) {
+                logInfo("Found saved password, opening browser", category: .ui)
+                openFileBrowser(for: connection, password: savedPassword)
+            } else {
+                logInfo("No saved password, showing prompt", category: .ui)
+                isShowingPasswordPrompt = true
+            }
         }
     }
 
@@ -281,7 +318,12 @@ final class ConnectionListViewModel {
             username: connection.username,
             password: password,
             authMethod: connection.authMethod,
-            privateKeyPath: connection.privateKeyPath
+            privateKeyPath: connection.privateKeyPath,
+            connectionType: connection.connectionType,
+            s3Region: connection.s3Region,
+            s3Bucket: connection.s3Bucket,
+            s3Endpoint: connection.s3Endpoint,
+            s3SecretAccessKey: connection.connectionType == .s3 ? password : nil
         )
 
         let windowId = windowManager.storeFileBrowserData(data)

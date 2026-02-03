@@ -18,6 +18,37 @@ final class FileBrowserViewModel {
     private(set) var isConnected: Bool = false
     var error: AppError?
 
+    // MARK: - Transfer Progress State
+    private(set) var activeTransfers: [UUID: TransferProgress] = [:]
+    private(set) var recentTransfers: [TransferProgress] = []  // Completed/failed transfers
+    private var transferTasks: [UUID: Task<Void, Never>] = [:]  // Tasks for cancellation
+    var isShowingTransfersPopover: Bool = false
+
+    /// Whether any transfer is currently in progress
+    var hasActiveTransfers: Bool {
+        !activeTransfers.isEmpty
+    }
+
+    /// Total number of active transfers
+    var activeTransferCount: Int {
+        activeTransfers.count
+    }
+
+    /// All transfers for display (active + recent)
+    var allTransfers: [TransferProgress] {
+        let active = activeTransfers.values.sorted { $0.startTime > $1.startTime }
+        return active + recentTransfers
+    }
+
+    /// Overall progress of all active transfers (0.0 to 1.0)
+    var overallProgress: Double {
+        guard !activeTransfers.isEmpty else { return 0 }
+        let totalBytes = activeTransfers.values.reduce(0) { $0 + $1.totalBytes }
+        let transferredBytes = activeTransfers.values.reduce(0) { $0 + $1.bytesTransferred }
+        guard totalBytes > 0 else { return 0 }
+        return Double(transferredBytes) / Double(totalBytes)
+    }
+
     var selectedFiles: Set<UUID> = []
     var sortCriteria: RemoteFile.SortCriteria = .name
     var sortAscending: Bool = true
@@ -42,12 +73,13 @@ final class FileBrowserViewModel {
     private let password: String
 
     // MARK: - Dependencies
-    private let sftpSession: SFTPSessionProtocol
+    private let sftpSession: SFTPSessionProtocol?
+    private let s3Session: S3SessionProtocol?
     private let fileRepository: FileRepositoryProtocol
     private let clipboardService: ClipboardService
     private let navigationService = NavigationService()
 
-    // MARK: - Initialization
+    // MARK: - Initialization (SFTP)
     init(
         connection: Connection,
         sftpSession: SFTPSessionProtocol,
@@ -57,9 +89,26 @@ final class FileBrowserViewModel {
     ) {
         self.connection = connection
         self.sftpSession = sftpSession
+        self.s3Session = nil
         self.fileRepository = fileRepository
         self.clipboardService = clipboardService
         self.password = password
+    }
+
+    // MARK: - Initialization (S3)
+    init(
+        connection: Connection,
+        s3Session: S3SessionProtocol,
+        fileRepository: FileRepositoryProtocol,
+        clipboardService: ClipboardService,
+        secretAccessKey: String
+    ) {
+        self.connection = connection
+        self.sftpSession = nil
+        self.s3Session = s3Session
+        self.fileRepository = fileRepository
+        self.clipboardService = clipboardService
+        self.password = secretAccessKey
     }
 
     // MARK: - Computed Properties
@@ -124,36 +173,62 @@ final class FileBrowserViewModel {
         state = .loading
 
         do {
-            if connection.authMethod == .password {
-                try await sftpSession.connect(
-                    host: connection.host,
-                    port: connection.port,
-                    username: connection.username,
-                    password: password
+            if connection.connectionType == .s3 {
+                // S3 connection
+                guard let s3Session = s3Session else {
+                    throw AppError.notConnected
+                }
+                try await s3Session.connect(
+                    accessKeyId: connection.username,
+                    secretAccessKey: password,
+                    region: connection.s3Region ?? "us-east-1",
+                    bucket: connection.s3Bucket ?? "",
+                    endpoint: connection.s3Endpoint
                 )
-            } else if let keyPath = connection.privateKeyPath {
-                try await sftpSession.connect(
-                    host: connection.host,
-                    port: connection.port,
-                    username: connection.username,
-                    privateKeyPath: keyPath,
-                    passphrase: password.isEmpty ? nil : password
-                )
+                isConnected = true
+                currentPath = await s3Session.currentPath
+                navigationService.reset(to: currentPath)
+                AnalyticsService.track(.fileBrowserOpened)
+                await loadFiles()
+            } else {
+                // SFTP connection
+                guard let sftpSession = sftpSession else {
+                    throw AppError.notConnected
+                }
+                if connection.authMethod == .password {
+                    try await sftpSession.connect(
+                        host: connection.host,
+                        port: connection.port,
+                        username: connection.username,
+                        password: password
+                    )
+                } else if let keyPath = connection.privateKeyPath {
+                    try await sftpSession.connect(
+                        host: connection.host,
+                        port: connection.port,
+                        username: connection.username,
+                        privateKeyPath: keyPath,
+                        passphrase: password.isEmpty ? nil : password
+                    )
+                }
+                isConnected = true
+                currentPath = await sftpSession.currentPath
+                navigationService.reset(to: currentPath)
+                AnalyticsService.track(.fileBrowserOpened)
+                await loadFiles()
             }
-
-            isConnected = true
-            currentPath = await sftpSession.currentPath
-            navigationService.reset(to: currentPath)
-            AnalyticsService.track(.fileBrowserOpened)
-            await loadFiles()
         } catch {
-            logError("Connection failed: \(error)", category: .sftp)
+            logError("Connection failed: \(error)", category: connection.connectionType == .s3 ? .s3 : .sftp)
             state = .error(AppError.from(error))
         }
     }
 
     func disconnect() async {
-        await sftpSession.disconnect()
+        if connection.connectionType == .s3 {
+            await s3Session?.disconnect()
+        } else {
+            await sftpSession?.disconnect()
+        }
         isConnected = false
         files = []
         currentPath = "/"
@@ -167,10 +242,14 @@ final class FileBrowserViewModel {
 
         do {
             files = try await fileRepository.listFiles(at: currentPath)
-            currentPath = await sftpSession.currentPath
+            if connection.connectionType == .s3 {
+                currentPath = await s3Session?.currentPath ?? "/"
+            } else {
+                currentPath = await sftpSession?.currentPath ?? "/"
+            }
             state = .success(())
         } catch {
-            logError("Failed to load files: \(error)", category: .sftp)
+            logError("Failed to load files: \(error)", category: connection.connectionType == .s3 ? .s3 : .sftp)
             state = .error(AppError.from(error))
         }
     }
@@ -180,12 +259,16 @@ final class FileBrowserViewModel {
 
         do {
             files = try await fileRepository.listFiles(at: path)
-            currentPath = await sftpSession.currentPath
+            if connection.connectionType == .s3 {
+                currentPath = await s3Session?.currentPath ?? "/"
+            } else {
+                currentPath = await sftpSession?.currentPath ?? "/"
+            }
             navigationService.navigate(to: currentPath)
             selectedFiles.removeAll()
             state = .success(())
         } catch {
-            logError("Failed to navigate to \(path): \(error)", category: .sftp)
+            logError("Failed to navigate to \(path): \(error)", category: connection.connectionType == .s3 ? .s3 : .sftp)
             state = .error(AppError.from(error))
         }
     }
@@ -227,11 +310,15 @@ final class FileBrowserViewModel {
 
         do {
             files = try await fileRepository.listFiles(at: path)
-            currentPath = await sftpSession.currentPath
+            if connection.connectionType == .s3 {
+                currentPath = await s3Session?.currentPath ?? "/"
+            } else {
+                currentPath = await sftpSession?.currentPath ?? "/"
+            }
             selectedFiles.removeAll()
             state = .success(())
         } catch {
-            logError("Failed to navigate to \(path): \(error)", category: .sftp)
+            logError("Failed to navigate to \(path): \(error)", category: connection.connectionType == .s3 ? .s3 : .sftp)
             state = .error(AppError.from(error))
         }
     }
@@ -372,21 +459,142 @@ final class FileBrowserViewModel {
 
         guard panel.runModal() == .OK else { return }
 
-        for url in panel.urls {
-            let remotePath = currentPath.appendingPathComponent(url.lastPathComponent)
+        await uploadURLs(panel.urls)
+    }
 
-            do {
-                try await fileRepository.upload(localURL: url, to: remotePath)
-                AnalyticsService.track(.fileUploaded)
-                logInfo("Uploaded: \(url.lastPathComponent)", category: .sftp)
-            } catch {
-                logError("Upload failed: \(error)", category: .sftp)
-                self.error = AppError.from(error)
-                return
+    /// Core upload method that handles multiple files with progress tracking
+    private func uploadURLs(_ urls: [URL]) async {
+        // Show the transfers popover when starting uploads
+        if !urls.isEmpty {
+            isShowingTransfersPopover = true
+        }
+
+        for url in urls {
+            guard url.isFileURL else { continue }
+
+            let remotePath = currentPath.appendingPathComponent(url.lastPathComponent)
+            let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+
+            // Create transfer tracking entry
+            let transferId = UUID()
+            let transfer = TransferProgress(
+                id: transferId,
+                fileName: url.lastPathComponent,
+                localURL: url,
+                remotePath: remotePath,
+                bytesTransferred: 0,
+                totalBytes: fileSize,
+                status: .inProgress
+            )
+            activeTransfers[transferId] = transfer
+
+            // Create a task for this upload so it can be cancelled
+            let uploadTask = Task { [weak self] in
+                guard let self = self else { return }
+
+                do {
+                    // Check for cancellation before starting
+                    try Task.checkCancellation()
+
+                    try await self.fileRepository.upload(localURL: url, to: remotePath) { [weak self] bytesTransferred in
+                        Task { @MainActor in
+                            // Check if transfer was cancelled
+                            guard self?.activeTransfers[transferId] != nil else { return }
+                            self?.activeTransfers[transferId]?.bytesTransferred = bytesTransferred
+                        }
+                    }
+
+                    // Check for cancellation after upload
+                    try Task.checkCancellation()
+
+                    // Mark as completed
+                    await MainActor.run {
+                        if var completedTransfer = self.activeTransfers.removeValue(forKey: transferId) {
+                            completedTransfer.status = .completed
+                            completedTransfer.bytesTransferred = fileSize
+                            self.recentTransfers.insert(completedTransfer, at: 0)
+                            // Keep only last 10 recent transfers
+                            if self.recentTransfers.count > 10 {
+                                self.recentTransfers = Array(self.recentTransfers.prefix(10))
+                            }
+                        }
+                        self.transferTasks.removeValue(forKey: transferId)
+                    }
+
+                    AnalyticsService.track(.fileUploaded)
+                    logInfo("Uploaded: \(url.lastPathComponent)", category: self.connection.connectionType == .s3 ? .s3 : .sftp)
+
+                } catch {
+                    // Check if this was a cancellation (either direct CancellationError or Task was cancelled)
+                    let isCancellation = error is CancellationError ||
+                        Task.isCancelled ||
+                        String(describing: error).contains("CancellationError")
+
+                    if isCancellation {
+                        // Mark as cancelled (if not already removed by cancelTransfer)
+                        await MainActor.run {
+                            if var cancelledTransfer = self.activeTransfers.removeValue(forKey: transferId) {
+                                cancelledTransfer.status = .cancelled
+                                self.recentTransfers.insert(cancelledTransfer, at: 0)
+                            }
+                            self.transferTasks.removeValue(forKey: transferId)
+                        }
+                        logInfo("Upload cancelled: \(url.lastPathComponent)", category: self.connection.connectionType == .s3 ? .s3 : .sftp)
+                    } else {
+                        // Mark as failed
+                        await MainActor.run {
+                            if var failedTransfer = self.activeTransfers.removeValue(forKey: transferId) {
+                                failedTransfer.status = .failed
+                                failedTransfer.error = error.localizedDescription
+                                self.recentTransfers.insert(failedTransfer, at: 0)
+                            }
+                            self.transferTasks.removeValue(forKey: transferId)
+                        }
+
+                        logError("Upload failed: \(error)", category: self.connection.connectionType == .s3 ? .s3 : .sftp)
+                        await MainActor.run {
+                            self.error = AppError.from(error)
+                        }
+                    }
+                }
             }
+
+            transferTasks[transferId] = uploadTask
+
+            // Wait for this upload to complete before starting the next one
+            await uploadTask.value
         }
 
         await loadFiles()
+    }
+
+    /// Cancels an active transfer
+    func cancelTransfer(_ transfer: TransferProgress) {
+        guard transfer.isInProgress else { return }
+
+        // Cancel the task
+        if let task = transferTasks[transfer.id] {
+            task.cancel()
+        }
+
+        // Immediately update UI to show cancelled state
+        if var cancelledTransfer = activeTransfers.removeValue(forKey: transfer.id) {
+            cancelledTransfer.status = .cancelled
+            recentTransfers.insert(cancelledTransfer, at: 0)
+        }
+        transferTasks.removeValue(forKey: transfer.id)
+    }
+
+    /// Cancels all active transfers
+    func cancelAllTransfers() {
+        for (id, task) in transferTasks {
+            task.cancel()
+            if var cancelledTransfer = activeTransfers.removeValue(forKey: id) {
+                cancelledTransfer.status = .cancelled
+                recentTransfers.insert(cancelledTransfer, at: 0)
+            }
+        }
+        transferTasks.removeAll()
     }
 
     // MARK: - Drag and Drop
@@ -400,20 +608,17 @@ final class FileBrowserViewModel {
 
     /// Uploads files dropped from Finder into the current directory
     func uploadDroppedFiles(_ urls: [URL]) async {
-        for url in urls {
-            guard url.isFileURL else { continue }
-            let remotePath = currentPath.appendingPathComponent(url.lastPathComponent)
-            do {
-                try await fileRepository.upload(localURL: url, to: remotePath)
-                AnalyticsService.track(.fileUploaded)
-                logInfo("Uploaded via drop: \(url.lastPathComponent)", category: .sftp)
-            } catch {
-                logError("Drop upload failed: \(error)", category: .sftp)
-                self.error = AppError.from(error)
-                return
-            }
-        }
-        await loadFiles()
+        await uploadURLs(urls)
+    }
+
+    /// Clears completed/failed transfers from the list
+    func clearCompletedTransfers() {
+        recentTransfers.removeAll()
+    }
+
+    /// Removes a specific transfer from the recent list
+    func removeTransfer(_ transfer: TransferProgress) {
+        recentTransfers.removeAll { $0.id == transfer.id }
     }
 
     // MARK: - File Content
@@ -484,7 +689,11 @@ final class FileBrowserViewModel {
             username: connection.username,
             password: password,
             authMethod: connection.authMethod,
-            privateKeyPath: connection.privateKeyPath
+            privateKeyPath: connection.privateKeyPath,
+            connectionType: connection.connectionType,
+            s3Region: connection.s3Region,
+            s3Bucket: connection.s3Bucket,
+            s3Endpoint: connection.s3Endpoint
         )
         let windowId = WindowManager.shared.storeFileEditorData(data)
         pendingEditorWindowId = windowId

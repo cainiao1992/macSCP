@@ -1,90 +1,79 @@
 //
-//  SFTPSessionProtocol.swift
+//  S3SessionProtocol.swift
 //  macSCP
 //
-//  Protocol for SFTP session operations
+//  Protocol for S3 session operations
 //
 
 import Foundation
 
-protocol SFTPSessionProtocol: Sendable {
+protocol S3SessionProtocol: Sendable {
     /// Whether the session is currently connected
     var isConnected: Bool { get async }
 
-    /// Current working directory
+    /// Current working directory (bucket prefix)
     var currentPath: String { get async }
 
-    /// Connect to the server with password authentication
+    /// Current bucket name
+    var bucketName: String { get async }
+
+    /// Connect to S3 with credentials
     func connect(
-        host: String,
-        port: Int,
-        username: String,
-        password: String
+        accessKeyId: String,
+        secretAccessKey: String,
+        region: String,
+        bucket: String,
+        endpoint: String?
     ) async throws
 
-    /// Connect to the server with private key authentication
-    /// - Note: Passphrase support depends on the underlying implementation.
-    ///         Currently, passphrase-protected keys may not be supported.
-    ///         Use unencrypted keys or convert encrypted keys to unencrypted format.
-    func connect(
-        host: String,
-        port: Int,
-        username: String,
-        privateKeyPath: String,
-        passphrase: String?
-    ) async throws
-
-    /// Disconnect from the server
+    /// Disconnect from S3
     func disconnect() async
 
-    /// List files in a directory
+    /// List objects in a directory (prefix)
     func listFiles(at path: String) async throws -> [RemoteFile]
 
-    /// Get file attributes
+    /// Get object metadata
     func getFileInfo(at path: String) async throws -> RemoteFile
 
-    /// Create a directory
+    /// Create a "directory" (marker object with trailing slash)
     func createDirectory(at path: String) async throws
 
     /// Create an empty file
     func createFile(at path: String) async throws
 
-    /// Delete a file
+    /// Delete an object
     func deleteFile(at path: String) async throws
 
-    /// Delete a directory (recursively)
+    /// Delete a "directory" and all its contents
     func deleteDirectory(at path: String) async throws
 
-    /// Rename/move a file or directory
+    /// Rename/move an object (copy + delete)
     func rename(from sourcePath: String, to destinationPath: String) async throws
 
-    /// Copy a file
+    /// Copy an object
     func copyFile(from sourcePath: String, to destinationPath: String) async throws
 
-    /// Copy a directory (recursively)
+    /// Copy a "directory" and all its contents
     func copyDirectory(from sourcePath: String, to destinationPath: String) async throws
 
-    /// Move a file or directory
+    /// Move an object (copy + delete)
     func move(from sourcePath: String, to destinationPath: String) async throws
 
-    /// Download a file
+    /// Download an object to local storage
     func downloadFile(from remotePath: String, to localURL: URL) async throws
 
-    /// Upload a file
+    /// Upload a file to S3
     func uploadFile(from localURL: URL, to remotePath: String) async throws
 
-    /// Upload a file with progress reporting
+    /// Upload a file to S3 with progress reporting
     func uploadFile(from localURL: URL, to remotePath: String, progress: TransferProgressHandler?) async throws
 
-    /// Read file content as string
+    /// Read object content as string
     func readFileContent(at path: String) async throws -> String
 
-    /// Write string content to a file
+    /// Write string content to an object
     func writeFileContent(_ content: String, to path: String) async throws
 
-    /// Get the real/absolute path (resolves ~ and symlinks)
+    /// Get the absolute path (just returns the path for S3)
     func getRealPath(at path: String) async throws -> String
-
-    /// Execute a shell command
-    func executeCommand(_ command: String) async throws -> String
 }

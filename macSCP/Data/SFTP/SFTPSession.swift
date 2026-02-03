@@ -348,10 +348,32 @@ actor SFTPSession: SFTPSessionProtocol {
 
         do {
             try await client.withSFTP { sftp in
+                // Get file size first
+                let attributes = try await sftp.getAttributes(at: remotePath)
+                let fileSize = attributes.size ?? 0
+                let chunkSize = UInt64(FileOperationConstants.chunkSize)
+
                 try await sftp.withFile(filePath: remotePath, flags: .read) { file in
-                    let buffer = try await file.readAll()
-                    let data = Data(buffer: buffer)
-                    try data.write(to: localURL)
+                    // Create/truncate local file
+                    FileManager.default.createFile(atPath: localURL.path, contents: nil)
+                    let fileHandle = try FileHandle(forWritingTo: localURL)
+                    defer { try? fileHandle.close() }
+
+                    var offset: UInt64 = 0
+
+                    while offset < fileSize {
+                        let bytesToRead = min(chunkSize, fileSize - offset)
+                        let buffer = try await file.read(from: offset, length: UInt32(bytesToRead))
+                        let data = Data(buffer: buffer)
+
+                        try fileHandle.write(contentsOf: data)
+                        offset += UInt64(data.count)
+
+                        // Break if we didn't get any data (EOF)
+                        if data.isEmpty {
+                            break
+                        }
+                    }
                 }
             }
             logInfo("Downloaded: \(remotePath) to \(localURL.path)", category: .sftp)
@@ -361,19 +383,46 @@ actor SFTPSession: SFTPSessionProtocol {
     }
 
     func uploadFile(from localURL: URL, to remotePath: String) async throws {
+        try await uploadFile(from: localURL, to: remotePath, progress: nil)
+    }
+
+    func uploadFile(from localURL: URL, to remotePath: String, progress: TransferProgressHandler?) async throws {
         guard let client = client else {
             throw AppError.notConnected
         }
 
         do {
-            let data = try Data(contentsOf: localURL)
+            // Use FileHandle for streaming reads instead of loading entire file into memory
+            let fileHandle = try FileHandle(forReadingFrom: localURL)
+            defer { try? fileHandle.close() }
+
+            let fileSize = try FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? UInt64 ?? 0
+            let chunkSize = FileOperationConstants.chunkSize
+
+            // Report initial progress
+            progress?(0)
 
             try await client.withSFTP { sftp in
                 // Remove existing file if present
                 try? await sftp.remove(at: remotePath)
 
                 try await sftp.withFile(filePath: remotePath, flags: [.write, .create, .truncate]) { file in
-                    try await file.write(ByteBuffer(data: data))
+                    var offset: UInt64 = 0
+
+                    while offset < fileSize {
+                        // Read chunk from file handle
+                        try fileHandle.seek(toOffset: offset)
+                        guard let chunkData = try fileHandle.read(upToCount: chunkSize), !chunkData.isEmpty else {
+                            break
+                        }
+
+                        // Write chunk at current offset
+                        try await file.write(ByteBuffer(data: chunkData), at: offset)
+                        offset += UInt64(chunkData.count)
+
+                        // Report progress
+                        progress?(Int64(offset))
+                    }
                 }
             }
             logInfo("Uploaded: \(localURL.path) to \(remotePath)", category: .sftp)

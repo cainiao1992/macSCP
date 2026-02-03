@@ -32,19 +32,37 @@ final class FileEditorViewModel {
 
     // MARK: - Dependencies
     private let fileRepository: FileRepositoryProtocol
+    private let s3Session: S3SessionProtocol?
+    private let sftpSession: SFTPSessionProtocol?
 
     // MARK: - Initialization
     init(
         filePath: String,
         fileName: String,
         initialContent: String,
-        fileRepository: FileRepositoryProtocol
+        fileRepository: FileRepositoryProtocol,
+        s3Session: S3SessionProtocol? = nil,
+        sftpSession: SFTPSessionProtocol? = nil
     ) {
         self.filePath = filePath
         self.fileName = fileName
         self.content = initialContent
         self.savedContent = initialContent
         self.fileRepository = fileRepository
+        self.s3Session = s3Session
+        self.sftpSession = sftpSession
+    }
+
+    // MARK: - Cleanup
+    func cleanup() async {
+        if let s3Session = s3Session {
+            await s3Session.disconnect()
+            logInfo("S3 session disconnected for editor", category: .s3)
+        }
+        if let sftpSession = sftpSession {
+            await sftpSession.disconnect()
+            logInfo("SFTP session disconnected for editor", category: .sftp)
+        }
     }
 
     // MARK: - Computed Properties

@@ -11,6 +11,7 @@ import os.log
 enum LogCategory: String {
     case app = "App"
     case sftp = "SFTP"
+    case s3 = "S3"
     case keychain = "Keychain"
     case database = "Database"
     case ui = "UI"
@@ -49,7 +50,7 @@ final class Logger {
     private var loggers: [LogCategory: os.Logger] = [:]
 
     private init() {
-        for category in [LogCategory.app, .sftp, .keychain, .database, .ui, .network] {
+        for category in [LogCategory.app, .sftp, .s3, .keychain, .database, .ui, .network] {
             loggers[category] = os.Logger(subsystem: subsystem, category: category.rawValue)
         }
     }

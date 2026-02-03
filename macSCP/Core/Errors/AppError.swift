@@ -23,6 +23,13 @@ enum AppError: LocalizedError, Sendable {
     case directoryNotEmpty
     case invalidPath
 
+    // S3 errors
+    case s3BucketNotFound
+    case s3AccessDenied
+    case s3ObjectNotFound
+    case s3OperationFailed(String)
+    case invalidS3Credentials
+
     // Data errors
     case saveFailed(String)
     case fetchFailed(String)
@@ -70,6 +77,17 @@ enum AppError: LocalizedError, Sendable {
         case .invalidPath:
             return "Invalid path"
 
+        case .s3BucketNotFound:
+            return "S3 bucket not found"
+        case .s3AccessDenied:
+            return "Access denied to S3 resource"
+        case .s3ObjectNotFound:
+            return "S3 object not found"
+        case .s3OperationFailed(let message):
+            return "S3 operation failed: \(message)"
+        case .invalidS3Credentials:
+            return "Invalid S3 credentials"
+
         case .saveFailed(let message):
             return "Failed to save: \(message)"
         case .fetchFailed(let message):
@@ -108,10 +126,14 @@ enum AppError: LocalizedError, Sendable {
             return "Please check your network connection and server address."
         case .authenticationFailed:
             return "Please verify your username and password."
-        case .permissionDenied:
+        case .permissionDenied, .s3AccessDenied:
             return "You don't have permission to perform this action."
         case .notConnected:
             return "Please connect to a server first."
+        case .s3BucketNotFound:
+            return "Please check your bucket name and region."
+        case .invalidS3Credentials:
+            return "Please verify your Access Key ID and Secret Access Key."
         default:
             return nil
         }

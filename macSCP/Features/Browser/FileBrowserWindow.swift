@@ -55,7 +55,6 @@ struct FileBrowserWindow: View {
         }
 
         let container = DependencyContainer.shared
-        let sftpSession = container.makeSFTPSession()
 
         let connection = Connection(
             id: data.connectionId,
@@ -64,14 +63,30 @@ struct FileBrowserWindow: View {
             port: data.port,
             username: data.username,
             authMethod: data.authMethod,
-            privateKeyPath: data.privateKeyPath
+            privateKeyPath: data.privateKeyPath,
+            connectionType: data.connectionType,
+            s3Region: data.s3Region,
+            s3Bucket: data.s3Bucket,
+            s3Endpoint: data.s3Endpoint
         )
 
-        viewModel = container.makeFileBrowserViewModel(
-            connection: connection,
-            sftpSession: sftpSession,
-            password: data.password
-        )
+        if data.connectionType == .s3 {
+            // S3 connection
+            let s3Session = container.makeS3Session()
+            viewModel = container.makeS3FileBrowserViewModel(
+                connection: connection,
+                s3Session: s3Session,
+                secretAccessKey: data.s3SecretAccessKey ?? data.password
+            )
+        } else {
+            // SFTP connection
+            let sftpSession = container.makeSFTPSession()
+            viewModel = container.makeFileBrowserViewModel(
+                connection: connection,
+                sftpSession: sftpSession,
+                password: data.password
+            )
+        }
     }
 }
 

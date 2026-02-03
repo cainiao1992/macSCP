@@ -12,6 +12,7 @@ import SwiftUI
 enum AppConstants {
     static let bundleIdentifier = "com.macSCP"
     static let keychainService = "com.macSCP.ssh"
+    static let keychainS3Service = "com.macSCP.s3"
     static let defaultSSHPort = 22
     static let maxRecentConnections = 10
 }

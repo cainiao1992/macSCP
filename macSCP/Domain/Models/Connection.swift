@@ -23,6 +23,12 @@ struct Connection: Identifiable, Hashable, Sendable, Codable {
     var createdAt: Date
     var updatedAt: Date
 
+    // S3-specific fields
+    var connectionType: ConnectionType
+    var s3Region: String?
+    var s3Bucket: String?
+    var s3Endpoint: String?
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -37,7 +43,11 @@ struct Connection: Identifiable, Hashable, Sendable, Codable {
         iconName: String = "server.rack",
         folderId: UUID? = nil,
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        connectionType: ConnectionType = .sftp,
+        s3Region: String? = nil,
+        s3Bucket: String? = nil,
+        s3Endpoint: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -53,18 +63,38 @@ struct Connection: Identifiable, Hashable, Sendable, Codable {
         self.folderId = folderId
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.connectionType = connectionType
+        self.s3Region = s3Region
+        self.s3Bucket = s3Bucket
+        self.s3Endpoint = s3Endpoint
     }
 
     // MARK: - Computed Properties
     var displayHost: String {
-        if port == 22 {
-            return host
+        switch connectionType {
+        case .sftp:
+            if port == 22 {
+                return host
+            }
+            return "\(host):\(port)"
+        case .s3:
+            if let endpoint = s3Endpoint, !endpoint.isEmpty {
+                return endpoint
+            }
+            return s3Bucket ?? "S3"
         }
-        return "\(host):\(port)"
     }
 
     var connectionString: String {
-        "\(username)@\(displayHost)"
+        switch connectionType {
+        case .sftp:
+            return "\(username)@\(displayHost)"
+        case .s3:
+            if let bucket = s3Bucket {
+                return "s3://\(bucket)"
+            }
+            return "S3"
+        }
     }
 
     var hasDescription: Bool {
@@ -86,6 +116,15 @@ struct Connection: Identifiable, Hashable, Sendable, Codable {
 // MARK: - Validation
 extension Connection {
     var isValid: Bool {
+        switch connectionType {
+        case .sftp:
+            return isSFTPValid
+        case .s3:
+            return isS3Valid
+        }
+    }
+
+    private var isSFTPValid: Bool {
         !name.isBlank &&
         !host.isBlank &&
         !username.isBlank &&
@@ -93,7 +132,22 @@ extension Connection {
         (authMethod == .password || privateKeyPath != nil)
     }
 
+    private var isS3Valid: Bool {
+        !name.isBlank &&
+        !username.isBlank &&  // Access Key ID
+        !(s3Bucket?.isBlank ?? true)
+    }
+
     var validationErrors: [String] {
+        switch connectionType {
+        case .sftp:
+            return sftpValidationErrors
+        case .s3:
+            return s3ValidationErrors
+        }
+    }
+
+    private var sftpValidationErrors: [String] {
         var errors: [String] = []
         if name.isBlank {
             errors.append("Name is required")
@@ -111,5 +165,27 @@ extension Connection {
             errors.append("Private key path is required for key authentication")
         }
         return errors
+    }
+
+    private var s3ValidationErrors: [String] {
+        var errors: [String] = []
+        if name.isBlank {
+            errors.append("Name is required")
+        }
+        if username.isBlank {
+            errors.append("Access Key ID is required")
+        }
+        if s3Bucket?.isBlank ?? true {
+            errors.append("Bucket name is required")
+        }
+        return errors
+    }
+
+    var isS3Connection: Bool {
+        connectionType == .s3
+    }
+
+    var isSFTPConnection: Bool {
+        connectionType == .sftp
     }
 }

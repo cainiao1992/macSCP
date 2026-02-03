@@ -124,6 +124,13 @@ final class MockFileRepository: FileRepositoryProtocol, @unchecked Sendable {
         if let error = mockError { throw error }
     }
 
+    func upload(localURL: URL, to remotePath: String, progress: TransferProgressHandler?) async throws {
+        uploadCalled = true
+        lastUploadLocalURL = localURL
+        lastUploadRemotePath = remotePath
+        if let error = mockError { throw error }
+    }
+
     func readFileContent(at path: String) async throws -> String {
         readFileContentCalled = true
         lastReadPath = path
