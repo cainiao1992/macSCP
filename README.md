@@ -5,7 +5,7 @@
 <h1 align="center">macSCP</h1>
 
 <p align="center">
-  <strong>A native macOS file transfer client for SFTP and S3 with an elegant interface</strong>
+  <strong>A native macOS client for SFTP, S3, and SSH terminal with an elegant interface</strong>
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@
 
 ## Overview
 
-macSCP is a modern, native macOS application built with SwiftUI that provides seamless file management for SFTP servers and Amazon S3 storage. With its intuitive interface and powerful features, macSCP makes managing remote servers and cloud storage as easy as working with local files.
+macSCP is a modern, native macOS application built with SwiftUI that provides seamless file management for SFTP servers, Amazon S3 storage, and integrated SSH terminal access. With its intuitive interface and powerful features, macSCP makes managing remote servers and cloud storage as easy as working with local files.
 
 ## Features
 
@@ -88,6 +88,13 @@ macSCP is a modern, native macOS application built with SwiftUI that provides se
 - **Batch Operations**: Upload or download multiple files at once
 - **Error Handling**: Clear error messages and recovery options
 
+### 💻 **Terminal Emulator**
+- **Integrated SSH Terminal**: Open terminal sessions directly from SFTP connections
+- **Full Terminal Support**: Complete terminal emulation with xterm-256color support
+- **Multiple Sessions**: Open multiple terminal windows for different servers
+- **Native Experience**: Terminal windows integrated into the macOS app environment
+- **Quick Access**: Launch terminal from connection list or file browser toolbar
+
 ### 🛠️ **Developer-Friendly**
 - **SwiftData Persistence**: Modern data persistence using SwiftData
 - **Citadel SFTP**: Built on the robust Citadel SSH/SFTP library
@@ -139,6 +146,7 @@ macSCP uses Swift Package Manager for dependency management. Required packages:
 - [Citadel](https://github.com/Orlandos-nl/Citadel) - SSH/SFTP implementation
 - [Soto](https://github.com/soto-project/soto) - AWS SDK for Swift (S3 support)
 - [SwiftNIO](https://github.com/apple/swift-nio) - High-performance networking
+- [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) - Terminal emulator support
 
 ### Build Instructions
 
@@ -196,6 +204,7 @@ macSCP is built with modern Swift and SwiftUI patterns:
 - **Sessions**:
   - `SFTPSession` - SFTP protocol operations
   - `S3Session` - AWS S3 protocol operations
+  - `TerminalSession` - SSH terminal session management
 - **Repositories**:
   - `FileRepository` - SFTP file operations
   - `S3FileRepository` - S3 file operations
@@ -240,7 +249,7 @@ macSCP takes security seriously:
 
 Future features under consideration:
 
-- [ ] Terminal emulator integration
+- [x] Terminal emulator integration
 - [ ] Port forwarding support
 - [ ] File synchronization
 - [ ] Bookmarks and favorites
@@ -283,6 +292,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Built with [Citadel](https://github.com/Orlandos-nl/Citadel) by Joannis Orlandos
 - S3 support powered by [Soto](https://github.com/soto-project/soto)
+- Terminal emulation powered by [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) by Miguel de Icaza
 - Uses [SwiftNIO](https://github.com/apple/swift-nio) by Apple
 - Icons from SF Symbols by Apple
 - Inspired by classic SCP clients and modern macOS design
