@@ -11,7 +11,7 @@ struct SidebarView: View {
     @Bindable var viewModel: ConnectionListViewModel
     @Environment(\.openURL) private var openURL
 
-    private let gitHubIssuesURL = URL(string: "https://github.com/saxobrern/macSCP/issues")!
+    private let gitHubIssuesURL = URL(string: "https://github.com/macnev2013/macSCP/issues")!
 
     // Check if All Connections is selected
     private var isAllConnectionsSelected: Bool {
