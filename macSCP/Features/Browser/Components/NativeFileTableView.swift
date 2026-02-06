@@ -128,6 +128,7 @@ struct NativeFileTableView: NSViewRepresentable {
         )
     }
 
+    @MainActor
     class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSFilePromiseProviderDelegate, ContextMenuTableViewDelegate {
         var viewModel: FileBrowserViewModel
         var onDoubleClick: (RemoteFile) -> Void
