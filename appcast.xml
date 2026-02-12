@@ -5,6 +5,24 @@
         <description>Most recent changes with links to updates.</description>
         <language>en</language>
         <item>
+        <title>Version 0.2.5</title>
+        <pubDate>Thu, 12 Feb 2026 20:54:05 +0000</pubDate>
+        <sparkle:version>02122026</sparkle:version>
+        <sparkle:shortVersionString>0.2.5</sparkle:shortVersionString>
+        <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+        <description><![CDATA[
+            <ul>
+                <li>See release notes on GitHub</li>
+            </ul>
+        ]]></description>
+        <enclosure
+            url="https://github.com/macnev2013/macSCP/releases/download/v0.2.5/macSCP-0.2.5.dmg"
+            type="application/octet-stream"
+            sparkle:edSignature="1AspGfDNJZLaP7gteLyA7ioyEJNifYTYkjfyKgQApE0y1qVsqDxBGbt/IHJqzZQ26U+exBtVmYuhePiXTIPZCw=="
+            length="23251542"
+        />
+    </item>
+        <item>
         <title>Version 0.2.4</title>
         <pubDate>Thu, 12 Feb 2026 18:34:11 +0000</pubDate>
         <sparkle:version>02122026</sparkle:version>
