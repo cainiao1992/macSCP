@@ -12,6 +12,7 @@
 		47679DD22F33D7E3002F804C /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 47679DD12F33D7E3002F804C /* SwiftTerm */; };
 		47679DD42F33D7E3002F804C /* SwiftTermFuzz in Frameworks */ = {isa = PBXBuildFile; productRef = 47679DD32F33D7E3002F804C /* SwiftTermFuzz */; };
 		47679DD62F33D7E3002F804C /* termcast in Frameworks */ = {isa = PBXBuildFile; productRef = 47679DD52F33D7E3002F804C /* termcast */; };
+		47AD46FB2F3E3B2E0043EA07 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 47AD46FA2F3E3B2E0043EA07 /* Sparkle */; };
 		47S3SOTO2F3000000000A1A1 /* SotoS3 in Frameworks */ = {isa = PBXBuildFile; productRef = 47S3SOTO2F3000000000A1A0 /* SotoS3 */; };
 /* End PBXBuildFile section */
 
@@ -68,6 +69,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				47AD46FB2F3E3B2E0043EA07 /* Sparkle in Frameworks */,
 				47384BA32E96FC5200ECB4B5 /* Citadel in Frameworks */,
 				4721B3DC2F2F229B00279B18 /* TelemetryClient in Frameworks */,
 				47679DD22F33D7E3002F804C /* SwiftTerm in Frameworks */,
@@ -156,6 +158,7 @@
 				47679DD12F33D7E3002F804C /* SwiftTerm */,
 				47679DD32F33D7E3002F804C /* SwiftTermFuzz */,
 				47679DD52F33D7E3002F804C /* termcast */,
+				47AD46FA2F3E3B2E0043EA07 /* Sparkle */,
 			);
 			productName = macSCP;
 			productReference = 47384B732E96EB2800ECB4B5 /* macSCP.app */;
@@ -221,6 +224,7 @@
 				4721B3DA2F2F229B00279B18 /* XCRemoteSwiftPackageReference "SwiftClient" */,
 				47S3SOTO2F3000000000A1A2 /* XCRemoteSwiftPackageReference "soto" */,
 				47679DD02F33D7E3002F804C /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				47AD46F92F3E3B2E0043EA07 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 47384B742E96EB2800ECB4B5 /* Products */;
@@ -480,6 +484,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = macSCP/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MacSCP;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -526,6 +531,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = macSCP/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MacSCP;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -654,6 +660,14 @@
 				minimumVersion = 1.5.0;
 			};
 		};
+		47AD46F92F3E3B2E0043EA07 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.8.1;
+			};
+		};
 		47S3SOTO2F3000000000A1A2 /* XCRemoteSwiftPackageReference "soto" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/soto-project/soto";
@@ -689,6 +703,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 47679DD02F33D7E3002F804C /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = termcast;
+		};
+		47AD46FA2F3E3B2E0043EA07 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 47AD46F92F3E3B2E0043EA07 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 		47S3SOTO2F3000000000A1A0 /* SotoS3 */ = {
 			isa = XCSwiftPackageProductDependency;

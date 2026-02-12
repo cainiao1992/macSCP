@@ -21,9 +21,15 @@ jobs:
     name: Build and Create DMG
     runs-on: macos-14  # Apple Silicon runner
 
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -38,7 +44,7 @@ jobs:
           else
             VERSION=${GITHUB_REF#refs/tags/v}
           fi
-          BUILD_NUMBER=$(date +%Y%m%d)
+          BUILD_NUMBER=$(date +%m%d%Y)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
           echo "Version: $VERSION, Build: $BUILD_NUMBER"
@@ -93,6 +99,87 @@ jobs:
           echo "Created: $DMG_NAME"
           ls -lh "$DMG_NAME"
         id: dmg
+
+      - name: Find Sparkle sign_update tool
+        id: sparkle
+        run: |
+          SIGN_UPDATE=$(find ~/Library/Developer/Xcode/DerivedData -path "*/artifacts/sparkle/Sparkle/bin/sign_update" 2>/dev/null | head -1)
+          if [ -z "$SIGN_UPDATE" ]; then
+            # Fallback: check SPM build directory
+            SIGN_UPDATE=$(find . -path "*/.build/artifacts/sparkle/Sparkle/bin/sign_update" 2>/dev/null | head -1)
+          fi
+          if [ -z "$SIGN_UPDATE" ]; then
+            echo "ERROR: sign_update not found"
+            exit 1
+          fi
+          echo "sign_update=$SIGN_UPDATE" >> $GITHUB_OUTPUT
+          echo "Found sign_update at: $SIGN_UPDATE"
+
+      - name: Sign DMG with EdDSA
+        id: sign
+        run: |
+          DMG_NAME="${{ env.APP_NAME }}-${{ steps.version.outputs.version }}.dmg"
+          SIGN_UPDATE="${{ steps.sparkle.outputs.sign_update }}"
+
+          # Sign using private key from secret
+          SIGNATURE_OUTPUT=$(echo "${{ secrets.SPARKLE_PRIVATE_KEY }}" | "$SIGN_UPDATE" "$DMG_NAME" --ed-key-file -)
+          echo "Signature output: $SIGNATURE_OUTPUT"
+
+          # Extract edSignature value
+          ED_SIGNATURE=$(echo "$SIGNATURE_OUTPUT" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')
+          DMG_LENGTH=$(stat -f%z "$DMG_NAME")
+
+          echo "ed_signature=$ED_SIGNATURE" >> $GITHUB_OUTPUT
+          echo "dmg_length=$DMG_LENGTH" >> $GITHUB_OUTPUT
+          echo "EdDSA signature: $ED_SIGNATURE"
+          echo "DMG length: $DMG_LENGTH"
+
+      - name: Update appcast.xml
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BUILD_NUMBER="${{ steps.version.outputs.build_number }}"
+          ED_SIGNATURE="${{ steps.sign.outputs.ed_signature }}"
+          DMG_LENGTH="${{ steps.sign.outputs.dmg_length }}"
+          PUB_DATE=$(date -u '+%a, %d %b %Y %H:%M:%S %z')
+          DMG_URL="https://github.com/macnev2013/macSCP/releases/download/v${VERSION}/${APP_NAME}-${VERSION}.dmg"
+
+          # Build the new item XML
+          NEW_ITEM="        <item>
+                      <title>Version ${VERSION}</title>
+                      <pubDate>${PUB_DATE}</pubDate>
+                      <sparkle:version>${BUILD_NUMBER}</sparkle:version>
+                      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+                      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+                      <description><![CDATA[
+                          <ul>
+                              <li>See release notes on GitHub</li>
+                          </ul>
+                      ]]></description>
+                      <enclosure
+                          url=\"${DMG_URL}\"
+                          type=\"application/octet-stream\"
+                          sparkle:edSignature=\"${ED_SIGNATURE}\"
+                          length=\"${DMG_LENGTH}\"
+                      />
+                  </item>"
+
+          # Insert new item at the top of the channel (after <language> line)
+          sed -i '' "/<language>en<\/language>/a\\
+          ${NEW_ITEM}
+          " appcast.xml
+
+          echo "Updated appcast.xml with version ${VERSION}"
+
+      - name: Commit and push appcast.xml
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout main
+          git add appcast.xml
+          git commit -m "Update appcast.xml for v${{ steps.version.outputs.version }}"
+          git push origin main
 
       - name: Upload DMG as artifact
         uses: actions/upload-artifact@v4

@@ -64,5 +64,25 @@ echo "✨ DMG created successfully: ${FINAL_DMG}"
 echo ""
 echo "📍 Location: $(pwd)/${FINAL_DMG}"
 echo "📦 Size: $(du -h "${FINAL_DMG}" | cut -f1)"
+
+# EdDSA signing for Sparkle updates
+echo ""
+echo "🔐 Signing DMG for Sparkle updates..."
+SIGN_UPDATE=$(find ~/Library/Developer/Xcode/DerivedData/macSCP-*/SourcePackages/artifacts/sparkle/Sparkle/bin -name sign_update 2>/dev/null | head -1)
+
+if [ -n "${SIGN_UPDATE}" ]; then
+    SIGNATURE_OUTPUT=$("${SIGN_UPDATE}" "${FINAL_DMG}")
+    echo "✅ DMG signed successfully"
+    echo ""
+    echo "📋 Add the following to appcast.xml <enclosure> tag:"
+    echo "${SIGNATURE_OUTPUT}"
+    echo ""
+    DMG_LENGTH=$(stat -f%z "${FINAL_DMG}")
+    echo "length=\"${DMG_LENGTH}\""
+else
+    echo "⚠️  sign_update not found in DerivedData. Build the project in Xcode first to resolve Sparkle SPM package."
+    echo "   Then run: find ~/Library/Developer/Xcode/DerivedData/macSCP-*/SourcePackages/artifacts/sparkle/Sparkle/bin -name sign_update"
+fi
+
 echo ""
 echo "To install: Double-click the DMG and drag ${APP_NAME} to Applications folder"

@@ -7,13 +7,27 @@
 
 import SwiftUI
 import SwiftData
+import Sparkle
 
 @main
 struct MacSCPApp: App {
     @StateObject private var container = DependencyContainer.shared
 
+    private let updaterController: SPUStandardUpdaterController
+    @StateObject private var checkForUpdatesViewModel: CheckForUpdatesViewModel
+
     init() {
         AnalyticsService.initialize()
+
+        let controller = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
+        self.updaterController = controller
+        self._checkForUpdatesViewModel = StateObject(
+            wrappedValue: CheckForUpdatesViewModel(updater: controller.updater)
+        )
     }
 
     var body: some Scene {
@@ -68,6 +82,10 @@ struct MacSCPApp: App {
     // MARK: - Commands
     @CommandsBuilder
     private var appCommands: some Commands {
+        CommandGroup(after: .appInfo) {
+            CheckForUpdatesView(viewModel: checkForUpdatesViewModel)
+        }
+
         CommandGroup(replacing: .newItem) {
             Button("New Connection") {
                 // Handled by main window
