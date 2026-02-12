@@ -18,6 +18,7 @@ struct MacSCPApp: App {
 
     init() {
         AnalyticsService.initialize()
+        AppLockManager.shared.lockIfNeeded()
 
         let controller = SPUStandardUpdaterController(
             startingUpdater: true,
@@ -34,6 +35,7 @@ struct MacSCPApp: App {
         // Main Window - Connection List
         WindowGroup {
             ConnectionListView(viewModel: container.makeConnectionListViewModel())
+                .appLockOverlay()
         }
         .modelContainer(container.modelContainer)
         .defaultSize(WindowSize.main)
@@ -45,6 +47,7 @@ struct MacSCPApp: App {
         WindowGroup(id: WindowID.fileBrowser, for: String.self) { $windowId in
             if let windowId = windowId {
                 FileBrowserWindow(windowId: windowId)
+                    .appLockOverlay()
             }
         }
         .modelContainer(container.modelContainer)
@@ -54,6 +57,7 @@ struct MacSCPApp: App {
         WindowGroup(id: WindowID.fileEditor, for: String.self) { $windowId in
             if let windowId = windowId {
                 FileEditorWindow(windowId: windowId)
+                    .appLockOverlay()
             }
         }
         .modelContainer(container.modelContainer)
@@ -63,6 +67,7 @@ struct MacSCPApp: App {
         WindowGroup(id: WindowID.fileInfo, for: String.self) { $windowId in
             if let windowId = windowId {
                 FileInfoWindow(windowId: windowId)
+                    .appLockOverlay()
             }
         }
         .modelContainer(container.modelContainer)
@@ -73,10 +78,17 @@ struct MacSCPApp: App {
         WindowGroup(id: WindowID.terminal, for: String.self) { $windowId in
             if let windowId = windowId {
                 TerminalWindow(windowId: windowId)
+                    .appLockOverlay()
             }
         }
         .modelContainer(container.modelContainer)
         .defaultSize(WindowSize.terminal)
+
+        // Settings Window (Cmd+,)
+        Settings {
+            SettingsView()
+                .appLockOverlay()
+        }
     }
 
     // MARK: - Commands

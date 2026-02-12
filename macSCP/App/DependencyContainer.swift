@@ -37,6 +37,10 @@ final class DependencyContainer: ObservableObject {
     }()
 
     // MARK: - Services
+    lazy var appLockManager: AppLockManager = {
+        AppLockManager.shared
+    }()
+
     lazy var clipboardService: ClipboardService = {
         ClipboardService.shared
     }()

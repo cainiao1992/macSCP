@@ -16,8 +16,9 @@ struct ConnectionListView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: .constant(.all)) {
             SidebarView(viewModel: viewModel)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
         } detail: {
             ConnectionGridView(viewModel: viewModel)
         }

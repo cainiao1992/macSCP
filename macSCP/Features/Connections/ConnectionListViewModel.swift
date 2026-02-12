@@ -279,25 +279,35 @@ final class ConnectionListViewModel {
 
     func connectToServer(_ connection: Connection) {
         logInfo("Connect requested for: \(connection.name)", category: .ui)
-        connectionToConnect = connection
 
-        if connection.connectionType == .s3 {
-            // For S3, check for saved credentials
-            if let credentials = keychainService.getS3Credentials(for: connection.id) {
-                logInfo("Found saved S3 credentials, opening browser", category: .ui)
-                openFileBrowser(for: connection, password: credentials.secretAccessKey)
-            } else {
-                logInfo("No saved S3 credentials, showing prompt", category: .ui)
-                isShowingPasswordPrompt = true
+        Task { @MainActor in
+            // Gate connection behind biometric auth if configured
+            let allowed = await AppLockManager.shared.authenticateForConnection()
+            guard allowed else {
+                logInfo("Connection cancelled: biometric auth denied", category: .auth)
+                return
             }
-        } else {
-            // For SFTP, check for saved password
-            if let savedPassword = keychainService.getPassword(for: connection.id) {
-                logInfo("Found saved password, opening browser", category: .ui)
-                openFileBrowser(for: connection, password: savedPassword)
+
+            connectionToConnect = connection
+
+            if connection.connectionType == .s3 {
+                // For S3, check for saved credentials
+                if let credentials = keychainService.getS3Credentials(for: connection.id) {
+                    logInfo("Found saved S3 credentials, opening browser", category: .ui)
+                    openFileBrowser(for: connection, password: credentials.secretAccessKey)
+                } else {
+                    logInfo("No saved S3 credentials, showing prompt", category: .ui)
+                    isShowingPasswordPrompt = true
+                }
             } else {
-                logInfo("No saved password, showing prompt", category: .ui)
-                isShowingPasswordPrompt = true
+                // For SFTP, check for saved password
+                if let savedPassword = keychainService.getPassword(for: connection.id) {
+                    logInfo("Found saved password, opening browser", category: .ui)
+                    openFileBrowser(for: connection, password: savedPassword)
+                } else {
+                    logInfo("No saved password, showing prompt", category: .ui)
+                    isShowingPasswordPrompt = true
+                }
             }
         }
     }
@@ -372,19 +382,28 @@ final class ConnectionListViewModel {
     }
 
     func requestTerminal(for connection: Connection) {
-        connectionToConnect = connection
-
         if connection.connectionType == .s3 {
             logWarning("Terminal not supported for S3 connections", category: .ui)
             return
         }
 
-        // Check for saved password
-        if let savedPassword = keychainService.getPassword(for: connection.id) {
-            openTerminal(for: connection, password: savedPassword)
-        } else {
-            // Need to prompt for password
-            isShowingPasswordPrompt = true
+        Task { @MainActor in
+            // Gate terminal behind biometric auth if configured
+            let allowed = await AppLockManager.shared.authenticateForConnection()
+            guard allowed else {
+                logInfo("Terminal cancelled: biometric auth denied", category: .auth)
+                return
+            }
+
+            connectionToConnect = connection
+
+            // Check for saved password
+            if let savedPassword = keychainService.getPassword(for: connection.id) {
+                openTerminal(for: connection, password: savedPassword)
+            } else {
+                // Need to prompt for password
+                isShowingPasswordPrompt = true
+            }
         }
     }
 

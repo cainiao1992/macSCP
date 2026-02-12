@@ -105,7 +105,7 @@ struct SidebarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         }
-        .frame(minWidth: 180)
+        .frame(minWidth: 230, idealWidth: 230)
     }
 }
 

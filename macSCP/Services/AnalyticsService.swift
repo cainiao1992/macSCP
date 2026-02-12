@@ -183,6 +183,16 @@ enum AnalyticsService {
         ])
     }
 
+    // MARK: - Biometric Tracking
+
+    static func trackBiometricToggled(enabled: Bool) {
+        track(enabled ? .biometricEnabled : .biometricDisabled)
+    }
+
+    static func trackBiometricResult(success: Bool) {
+        track(success ? .biometricSuccess : .biometricFailed)
+    }
+
     // MARK: - Helpers
 
     private static func sizeCategory(for bytes: Int64) -> String {
@@ -234,6 +244,12 @@ enum AnalyticsService {
 
         // File info
         case fileInfoOpened = "file_info_opened"
+
+        // Biometric
+        case biometricEnabled = "biometric_enabled"
+        case biometricDisabled = "biometric_disabled"
+        case biometricSuccess = "biometric_success"
+        case biometricFailed = "biometric_failed"
     }
 
     enum ConnectionProtocol: String {

@@ -16,6 +16,7 @@ enum LogCategory: String {
     case database = "Database"
     case ui = "UI"
     case network = "Network"
+    case auth = "Auth"
 }
 
 enum LogLevel {
@@ -50,7 +51,7 @@ final class Logger {
     private var loggers: [LogCategory: os.Logger] = [:]
 
     private init() {
-        for category in [LogCategory.app, .sftp, .s3, .keychain, .database, .ui, .network] {
+        for category in [LogCategory.app, .sftp, .s3, .keychain, .database, .ui, .network, .auth] {
             loggers[category] = os.Logger(subsystem: subsystem, category: category.rawValue)
         }
     }

@@ -52,6 +52,10 @@ enum AppError: LocalizedError, Sendable {
     case terminalConnectionLost
     case terminalPTYFailed
 
+    // Biometric errors
+    case biometricNotAvailable
+    case biometricAuthFailed(String)
+
     // General errors
     case unknown(String)
     case notConnected
@@ -125,6 +129,11 @@ enum AppError: LocalizedError, Sendable {
         case .terminalPTYFailed:
             return "Failed to allocate pseudo-terminal"
 
+        case .biometricNotAvailable:
+            return "Touch ID is not available on this Mac"
+        case .biometricAuthFailed(let message):
+            return "Authentication failed: \(message)"
+
         case .unknown(let message):
             return message
         case .notConnected:
@@ -150,6 +159,10 @@ enum AppError: LocalizedError, Sendable {
             return "Please check your network connection and try reconnecting."
         case .terminalPTYFailed:
             return "The server may not support interactive terminals. Please try again."
+        case .biometricNotAvailable:
+            return "Use a Mac with Touch ID or pair an Apple Watch to enable biometric authentication."
+        case .biometricAuthFailed:
+            return "Please try again or use your system password."
         default:
             return nil
         }
