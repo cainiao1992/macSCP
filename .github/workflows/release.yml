@@ -44,7 +44,7 @@ jobs:
           else
             VERSION=${GITHUB_REF#refs/tags/v}
           fi
-          BUILD_NUMBER=$(date +%m%d%Y)
+          BUILD_NUMBER=$(date +%Y%m%d%H%M)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
           echo "Version: $VERSION, Build: $BUILD_NUMBER"
