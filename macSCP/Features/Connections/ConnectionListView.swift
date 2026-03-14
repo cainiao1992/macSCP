@@ -10,13 +10,12 @@ import SwiftUI
 struct ConnectionListView: View {
     @Bindable var viewModel: ConnectionListViewModel
     @Environment(\.openWindow) private var openWindow
-
     init(viewModel: ConnectionListViewModel) {
         self.viewModel = viewModel
     }
 
     var body: some View {
-        NavigationSplitView(columnVisibility: .constant(.all)) {
+        NavigationSplitView {
             SidebarView(viewModel: viewModel)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
         } detail: {

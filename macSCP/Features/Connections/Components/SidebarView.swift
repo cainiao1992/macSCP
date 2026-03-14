@@ -40,18 +40,19 @@ struct SidebarView: View {
                         )
                     }
                 }
-
-                // New Folder Button
+            }
+        }
+        .listStyle(.sidebar)
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
                 Button {
                     viewModel.isShowingNewFolderSheet = true
                 } label: {
                     Label("New Folder", systemImage: "folder.badge.plus")
-                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .help("New Folder")
             }
         }
-        .listStyle(.sidebar)
     }
 }
 
