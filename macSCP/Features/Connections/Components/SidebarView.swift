@@ -10,6 +10,10 @@ import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @Bindable var viewModel: ConnectionListViewModel
+    @State private var folderToRename: Folder?
+    @State private var renameText = ""
+    @State private var isShowingRenameAlert = false
+
     var body: some View {
         List(selection: $viewModel.selectedSidebarItem) {
             // All Connections
@@ -21,6 +25,12 @@ struct SidebarView: View {
                         .foregroundStyle(Color.accentColor)
                 }
             }
+            .dropDestination(for: Connection.self) { connections, _ in
+                for connection in connections {
+                    Task { await viewModel.moveConnection(connection, to: nil) }
+                }
+                return true
+            }
 
             // Folders Section
             Section("Folders") {
@@ -28,17 +38,35 @@ struct SidebarView: View {
                     NavigationLink(value: SidebarSelection.folder(folder.id)) {
                         FolderRowView(
                             folder: folder,
-                            connectionCount: viewModel.connectionCount(for: folder.id),
-                            onRename: { newName in
-                                Task {
-                                    await viewModel.renameFolder(folder, to: newName)
-                                }
-                            },
-                            onDelete: {
-                                viewModel.confirmDeleteFolder(folder)
-                            }
+                            connectionCount: viewModel.connectionCount(for: folder.id)
                         )
                     }
+                    .dropDestination(for: Connection.self) { connections, _ in
+                        for connection in connections {
+                            Task { await viewModel.moveConnection(connection, to: folder) }
+                        }
+                        return true
+                    }
+                    .contextMenu {
+                        Button {
+                            folderToRename = folder
+                            renameText = folder.name
+                            isShowingRenameAlert = true
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            viewModel.confirmDeleteFolder(folder)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                }
+                .onMove { source, destination in
+                    viewModel.reorderFolders(from: source, to: destination)
                 }
             }
         }
@@ -53,6 +81,24 @@ struct SidebarView: View {
                 .help("New Folder")
             }
         }
+        .alert("Rename Folder", isPresented: $isShowingRenameAlert) {
+            TextField("Folder name", text: $renameText)
+            Button("Rename") {
+                let name = renameText.trimmed
+                if !name.isEmpty, let folder = folderToRename {
+                    Task { await viewModel.renameFolder(folder, to: name) }
+                }
+                folderToRename = nil
+                renameText = ""
+            }
+            .keyboardShortcut(.defaultAction)
+            Button("Cancel", role: .cancel) {
+                folderToRename = nil
+                renameText = ""
+            }
+        } message: {
+            Text("Enter a new name for the folder.")
+        }
     }
 }
 
@@ -60,51 +106,16 @@ struct SidebarView: View {
 struct FolderRowView: View {
     let folder: Folder
     let connectionCount: Int
-    let onRename: (String) -> Void
-    let onDelete: () -> Void
-
-    @State private var isRenaming = false
-    @State private var newName: String = ""
 
     var body: some View {
         Label {
-            if isRenaming {
-                TextField("Name", text: $newName)
-                    .textFieldStyle(.plain)
-                    .onSubmit {
-                        if !newName.trimmed.isEmpty {
-                            onRename(newName.trimmed)
-                        }
-                        isRenaming = false
-                    }
-                    .onAppear {
-                        newName = folder.name
-                    }
-            } else {
-                Text(folder.name)
-            }
+            Text(folder.name)
         } icon: {
             Image(nsImage: NSWorkspace.shared.icon(for: .folder))
                 .resizable()
                 .frame(width: 20, height: 20)
         }
         .badge("\(connectionCount)")
-        .contextMenu {
-            Button {
-                newName = folder.name
-                isRenaming = true
-            } label: {
-                Label("Rename", systemImage: "pencil")
-            }
-
-            Divider()
-
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
     }
 }
 

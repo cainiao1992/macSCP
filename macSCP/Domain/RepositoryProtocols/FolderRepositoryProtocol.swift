@@ -28,4 +28,7 @@ protocol FolderRepositoryProtocol: Sendable {
 
     /// Returns the count of all folders
     func count() async throws -> Int
+
+    /// Updates the display order for a list of folders
+    func updateOrder(_ folders: [Folder]) async throws
 }

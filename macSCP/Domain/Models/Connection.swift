@@ -6,8 +6,17 @@
 //
 
 import Foundation
+import CoreTransferable
+import UniformTypeIdentifiers
 
-struct Connection: Identifiable, Hashable, Sendable, Codable {
+extension UTType {
+    static let connection = UTType(exportedAs: "com.macnev2013.macSCP.connection")
+}
+
+struct Connection: Identifiable, Hashable, Sendable, Codable, Transferable {
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .connection)
+    }
     let id: UUID
     var name: String
     var host: String

@@ -13,6 +13,7 @@ enum FolderMapper {
         Folder(
             id: entity.id,
             name: entity.name,
+            displayOrder: entity.displayOrder,
             createdAt: entity.createdAt,
             updatedAt: entity.updatedAt
         )
@@ -21,6 +22,7 @@ enum FolderMapper {
     /// Updates a FolderEntity from a Folder domain model
     static func update(_ entity: FolderEntity, from domain: Folder) {
         entity.name = domain.name
+        entity.displayOrder = domain.displayOrder
         entity.updatedAt = Date()
     }
 
@@ -29,6 +31,7 @@ enum FolderMapper {
         FolderEntity(
             id: domain.id,
             name: domain.name,
+            displayOrder: domain.displayOrder,
             createdAt: domain.createdAt,
             updatedAt: domain.updatedAt
         )

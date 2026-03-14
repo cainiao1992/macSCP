@@ -19,7 +19,7 @@ final class FolderRepository: FolderRepositoryProtocol, @unchecked Sendable {
     func fetchAll() async throws -> [Folder] {
         let context = dataStore.modelContext
         let descriptor = FetchDescriptor<FolderEntity>(
-            sortBy: [SortDescriptor(\.name, order: .forward)]
+            sortBy: [SortDescriptor(\.displayOrder, order: .forward), SortDescriptor(\.name, order: .forward)]
         )
 
         do {
@@ -140,6 +140,28 @@ final class FolderRepository: FolderRepositoryProtocol, @unchecked Sendable {
         } catch {
             logError("Failed to count folders: \(error)", category: .database)
             throw AppError.fetchFailed("folders")
+        }
+    }
+
+    @MainActor
+    func updateOrder(_ folders: [Folder]) async throws {
+        let context = dataStore.modelContext
+
+        do {
+            for folder in folders {
+                let folderId = folder.id
+                let descriptor = FetchDescriptor<FolderEntity>(
+                    predicate: #Predicate<FolderEntity> { $0.id == folderId }
+                )
+                if let entity = try context.fetch(descriptor).first {
+                    entity.displayOrder = folder.displayOrder
+                }
+            }
+            try context.save()
+            logInfo("Updated folder order", category: .database)
+        } catch {
+            logError("Failed to update folder order: \(error)", category: .database)
+            throw AppError.saveFailed("folder order")
         }
     }
 }

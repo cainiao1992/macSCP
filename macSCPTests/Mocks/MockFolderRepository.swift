@@ -86,6 +86,15 @@ final class MockFolderRepository: FolderRepositoryProtocol, @unchecked Sendable 
         return mockCount > 0 ? mockCount : mockFolders.count
     }
 
+    func updateOrder(_ folders: [Folder]) async throws {
+        if let error = mockError { throw error }
+        for folder in folders {
+            if let index = mockFolders.firstIndex(where: { $0.id == folder.id }) {
+                mockFolders[index].displayOrder = folder.displayOrder
+            }
+        }
+    }
+
     // MARK: - Reset
     func reset() {
         fetchAllCalled = false

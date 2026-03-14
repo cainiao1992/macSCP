@@ -18,7 +18,6 @@ struct ConnectionCardView: View {
     let onSelect: (Bool) -> Void
 
     @State private var isHovering = false
-    @State private var isPressed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -181,24 +180,18 @@ struct ConnectionCardView: View {
                     )
             }
         }
-        .scaleEffect(isPressed ? 0.98 : 1.0)
         .animation(.easeInOut(duration: 0.2), value: isHovering)
-        .animation(.easeInOut(duration: 0.1), value: isPressed)
         .animation(.easeInOut(duration: 0.2), value: isSelected)
         .onHover { hovering in
             isHovering = hovering
         }
+        .draggable(connection)
         .onTapGesture(count: 2) {
             onConnect()
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in isPressed = true }
-                .onEnded { _ in
-                    isPressed = false
-                    onSelect(!isSelected)
-                }
-        )
+        .onTapGesture(count: 1) {
+            onSelect(!isSelected)
+        }
         .contextMenu {
             Button {
                 onConnect()

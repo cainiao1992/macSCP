@@ -230,7 +230,8 @@ final class ConnectionListViewModel {
     // MARK: - Folder Actions
 
     func createFolder(name: String) async {
-        let folder = Folder(name: name)
+        let nextOrder = (folders.map(\.displayOrder).max() ?? -1) + 1
+        let folder = Folder(name: name, displayOrder: nextOrder)
 
         do {
             try await folderRepository.save(folder)
@@ -241,6 +242,21 @@ final class ConnectionListViewModel {
         } catch {
             logError("Failed to create folder: \(error)", category: .database)
             self.error = AppError.from(error)
+        }
+    }
+
+    func reorderFolders(from source: IndexSet, to destination: Int) {
+        folders.move(fromOffsets: source, toOffset: destination)
+        for (index, _) in folders.enumerated() {
+            folders[index].displayOrder = index
+        }
+        Task {
+            do {
+                try await folderRepository.updateOrder(folders)
+            } catch {
+                logError("Failed to reorder folders: \(error)", category: .database)
+                self.error = AppError.from(error)
+            }
         }
     }
 

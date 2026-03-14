@@ -12,6 +12,7 @@ import SwiftData
 final class FolderEntity {
     @Attribute(.unique) var id: UUID
     var name: String
+    var displayOrder: Int = 0
     var createdAt: Date
     var updatedAt: Date
 
@@ -21,11 +22,13 @@ final class FolderEntity {
     init(
         id: UUID = UUID(),
         name: String,
+        displayOrder: Int = 0,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
         self.id = id
         self.name = name
+        self.displayOrder = displayOrder
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.connections = []

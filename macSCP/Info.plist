@@ -2,6 +2,21 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.data</string>
+            </array>
+            <key>UTTypeDescription</key>
+            <string>macSCP Connection</string>
+            <key>UTTypeIdentifier</key>
+            <string>com.macnev2013.macSCP.connection</string>
+            <key>UTTypeTagSpecification</key>
+            <dict/>
+        </dict>
+    </array>
     <key>SUFeedURL</key>
     <string>https://raw.githubusercontent.com/macnev2013/macSCP/main/appcast.xml</string>
     <key>SUPublicEDKey</key>
