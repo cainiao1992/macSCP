@@ -116,5 +116,13 @@ struct MacSCPApp: App {
             }
             .keyboardShortcut("r", modifiers: .command)
         }
+
+        CommandGroup(replacing: .help) {
+            Button("Report a Bug…") {
+                if let url = URL(string: "https://github.com/macnev2013/macSCP/issues") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
     }
 }

@@ -10,106 +10,55 @@ import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @Bindable var viewModel: ConnectionListViewModel
-    @Environment(\.openURL) private var openURL
-
-    private let gitHubIssuesURL = URL(string: "https://github.com/macnev2013/macSCP/issues")!
-
     var body: some View {
-        VStack(spacing: 0) {
-            List(selection: $viewModel.selectedSidebarItem) {
-                // All Connections
-                NavigationLink(value: SidebarSelection.allConnections) {
-                    Label {
-                        Text("All Connections")
-                    } icon: {
-                        Image(systemName: "server.rack")
-                            .foregroundStyle(Color.accentColor)
-                    }
+        List(selection: $viewModel.selectedSidebarItem) {
+            // All Connections
+            NavigationLink(value: SidebarSelection.allConnections) {
+                Label {
+                    Text("All Connections")
+                } icon: {
+                    Image(systemName: "server.rack")
+                        .foregroundStyle(Color.accentColor)
                 }
+            }
 
-                // Folders Section
-                Section("Folders") {
-                    ForEach(viewModel.folders) { folder in
-                        NavigationLink(value: SidebarSelection.folder(folder.id)) {
-                            FolderRowView(
-                                folder: folder,
-                                onRename: { newName in
-                                    Task {
-                                        await viewModel.renameFolder(folder, to: newName)
-                                    }
-                                },
-                                onDelete: {
-                                    viewModel.confirmDeleteFolder(folder)
+            // Folders Section
+            Section("Folders") {
+                ForEach(viewModel.folders) { folder in
+                    NavigationLink(value: SidebarSelection.folder(folder.id)) {
+                        FolderRowView(
+                            folder: folder,
+                            connectionCount: viewModel.connectionCount(for: folder.id),
+                            onRename: { newName in
+                                Task {
+                                    await viewModel.renameFolder(folder, to: newName)
                                 }
-                            )
-                        }
+                            },
+                            onDelete: {
+                                viewModel.confirmDeleteFolder(folder)
+                            }
+                        )
                     }
-
-                    // New Folder Button
-                    Button {
-                        viewModel.isShowingNewFolderSheet = true
-                    } label: {
-                        Label("New Folder", systemImage: "folder.badge.plus")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
                 }
+
+                // New Folder Button
+                Button {
+                    viewModel.isShowingNewFolderSheet = true
+                } label: {
+                    Label("New Folder", systemImage: "folder.badge.plus")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
-            .listStyle(.sidebar)
-            .mask(
-                VStack(spacing: 0) {
-                    Color.black
-                    LinearGradient(
-                        colors: [.black, .clear],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 20)
-                }
-            )
-
-            // Report Bug Card
-            Button {
-                openURL(gitHubIssuesURL)
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "ladybug.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.orange)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Found a bug?")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        Text("Report it on GitHub")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.primary.opacity(0.05))
-                )
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
         }
+        .listStyle(.sidebar)
     }
 }
 
 // MARK: - Folder Row
 struct FolderRowView: View {
     let folder: Folder
+    let connectionCount: Int
     let onRename: (String) -> Void
     let onDelete: () -> Void
 
@@ -138,6 +87,7 @@ struct FolderRowView: View {
                 .resizable()
                 .frame(width: 16, height: 16)
         }
+        .badge(connectionCount)
         .contextMenu {
             Button {
                 newName = folder.name
