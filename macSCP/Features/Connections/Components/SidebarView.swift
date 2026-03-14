@@ -86,9 +86,9 @@ struct FolderRowView: View {
         } icon: {
             Image(nsImage: NSWorkspace.shared.icon(for: .folder))
                 .resizable()
-                .frame(width: 16, height: 16)
+                .frame(width: 20, height: 20)
         }
-        .badge(connectionCount)
+        .badge("\(connectionCount)")
         .contextMenu {
             Button {
                 newName = folder.name

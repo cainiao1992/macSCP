@@ -10,6 +10,8 @@ import SwiftUI
 struct ConnectionListView: View {
     @Bindable var viewModel: ConnectionListViewModel
     @Environment(\.openWindow) private var openWindow
+    @State private var newFolderName = ""
+
     init(viewModel: ConnectionListViewModel) {
         self.viewModel = viewModel
     }
@@ -76,17 +78,21 @@ struct ConnectionListView: View {
                 )
             }
         }
-        .sheet(isPresented: $viewModel.isShowingNewFolderSheet) {
-            NameInputSheet.newFolder(
-                onConfirm: { name in
-                    Task {
-                        await viewModel.createFolder(name: name)
-                    }
-                },
-                onCancel: {
-                    viewModel.isShowingNewFolderSheet = false
+        .alert("New Folder", isPresented: $viewModel.isShowingNewFolderSheet) {
+            TextField("Folder name", text: $newFolderName)
+            Button("Create") {
+                let name = newFolderName.trimmed
+                if !name.isEmpty {
+                    Task { await viewModel.createFolder(name: name) }
                 }
-            )
+                newFolderName = ""
+            }
+            .keyboardShortcut(.defaultAction)
+            Button("Cancel", role: .cancel) {
+                newFolderName = ""
+            }
+        } message: {
+            Text("Enter a name for the new folder.")
         }
         .sheet(isPresented: $viewModel.isShowingPasswordPrompt) {
             if let connection = viewModel.connectionToConnect {
