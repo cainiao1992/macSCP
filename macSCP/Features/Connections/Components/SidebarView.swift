@@ -6,25 +6,13 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @Bindable var viewModel: ConnectionListViewModel
     @Environment(\.openURL) private var openURL
 
     private let gitHubIssuesURL = URL(string: "https://github.com/macnev2013/macSCP/issues")!
-
-    // Check if All Connections is selected
-    private var isAllConnectionsSelected: Bool {
-        viewModel.selectedSidebarItem == .allConnections
-    }
-
-    // Check if a specific folder is selected
-    private func isFolderSelected(_ folderId: UUID) -> Bool {
-        if case .folder(let id) = viewModel.selectedSidebarItem {
-            return id == folderId
-        }
-        return false
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,7 +23,7 @@ struct SidebarView: View {
                         Text("All Connections")
                     } icon: {
                         Image(systemName: "server.rack")
-                            .foregroundStyle(isAllConnectionsSelected ? .white : .blue)
+                            .foregroundStyle(Color.accentColor)
                     }
                 }
 
@@ -46,7 +34,6 @@ struct SidebarView: View {
                             FolderRowView(
                                 folder: folder,
                                 connectionCount: viewModel.connectionCount(for: folder.id),
-                                isSelected: isFolderSelected(folder.id),
                                 onRename: { newName in
                                     Task {
                                         await viewModel.renameFolder(folder, to: newName)
@@ -113,7 +100,6 @@ struct SidebarView: View {
 struct FolderRowView: View {
     let folder: Folder
     let connectionCount: Int
-    let isSelected: Bool
     let onRename: (String) -> Void
     let onDelete: () -> Void
 
@@ -138,8 +124,9 @@ struct FolderRowView: View {
                 Text(folder.name)
             }
         } icon: {
-            Image(systemName: "folder.fill")
-                .foregroundStyle(isSelected ? .white : .cyan)
+            Image(nsImage: NSWorkspace.shared.icon(for: .folder))
+                .resizable()
+                .frame(width: 16, height: 16)
         }
         .contextMenu {
             Button {
