@@ -33,7 +33,6 @@ struct SidebarView: View {
                         NavigationLink(value: SidebarSelection.folder(folder.id)) {
                             FolderRowView(
                                 folder: folder,
-                                connectionCount: viewModel.connectionCount(for: folder.id),
                                 onRename: { newName in
                                     Task {
                                         await viewModel.renameFolder(folder, to: newName)
@@ -57,6 +56,17 @@ struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            .mask(
+                VStack(spacing: 0) {
+                    Color.black
+                    LinearGradient(
+                        colors: [.black, .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 20)
+                }
+            )
 
             // Report Bug Card
             Button {
@@ -71,9 +81,11 @@ struct SidebarView: View {
                         Text("Found a bug?")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.primary)
+                            .lineLimit(1)
                         Text("Report it on GitHub")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
 
                     Spacer()
@@ -92,14 +104,12 @@ struct SidebarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         }
-        .frame(minWidth: 230, idealWidth: 230)
     }
 }
 
 // MARK: - Folder Row
 struct FolderRowView: View {
     let folder: Folder
-    let connectionCount: Int
     let onRename: (String) -> Void
     let onDelete: () -> Void
 
