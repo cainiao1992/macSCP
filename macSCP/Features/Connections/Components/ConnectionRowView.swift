@@ -48,6 +48,25 @@ struct ConnectionRowView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
+                // Tags
+                if !connection.tags.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(connection.tags.prefix(3), id: \.self) { tag in
+                            Text(tag)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1)
+                                .background(.quaternary, in: Capsule())
+                        }
+                        if connection.tags.count > 3 {
+                            Text("+\(connection.tags.count - 3)")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .padding(.top, 1)
+                }
             }
         }
         .padding(.vertical, 4)

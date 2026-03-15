@@ -189,10 +189,10 @@ struct ConnectionDetailView: View {
                         ForEach(connection.tags, id: \.self) { tag in
                             Text(tag)
                                 .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.primary)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
-                                .background(Color.accentColor.opacity(0.1), in: Capsule())
-                                .foregroundStyle(Color.accentColor)
+                                .background(.fill.tertiary, in: Capsule())
                         }
                     }
                 }

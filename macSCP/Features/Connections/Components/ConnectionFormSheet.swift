@@ -2,7 +2,7 @@
 //  ConnectionFormSheet.swift
 //  macSCP
 //
-//  Form for creating and editing connections - Two-step wizard
+//  Form for creating and editing connections
 //
 
 import SwiftUI
@@ -33,8 +33,6 @@ struct ConnectionFormSheet: View {
     let onSave: (Connection, String?) -> Void
     let onCancel: () -> Void
 
-    // Wizard state
-    @State private var currentStep: FormStep = .selectType
     @State private var selectedType: ConnectionType = .sftp
 
     // Form fields
@@ -58,11 +56,6 @@ struct ConnectionFormSheet: View {
     @State private var s3Endpoint: String = ""
     @State private var s3SecretAccessKey: String = ""
 
-    enum FormStep {
-        case selectType
-        case fillDetails
-    }
-
     init(
         mode: ConnectionFormMode,
         savedPassword: String? = nil,
@@ -85,164 +78,30 @@ struct ConnectionFormSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            header
+            Text(mode.title)
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding()
 
             Divider()
 
-            // Content based on step
-            if isEditMode {
-                // Edit mode: skip type selection, go straight to form
-                detailsFormView
-            } else {
-                switch currentStep {
-                case .selectType:
-                    typeSelectionView
-                case .fillDetails:
-                    detailsFormView
-                }
-            }
-        }
-        .frame(width: 500, height: currentStep == .selectType && !isEditMode ? 480 : 580)
-        .animation(.easeInOut(duration: 0.2), value: currentStep)
-        .onAppear {
-            loadExistingData()
-        }
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack {
-            // Back button (only in step 2 for create mode)
-            if currentStep == .fillDetails && !isEditMode {
-                Button {
-                    withAnimation {
-                        currentStep = .selectType
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("Back")
-                            .font(.system(size: 13))
-                    }
-                    .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Spacer()
-
-            // Title
-            VStack(spacing: 2) {
-                Text(headerTitle)
-                    .font(.headline)
-
-                if currentStep == .selectType && !isEditMode {
-                    Text("Step 1 of 2")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else if !isEditMode {
-                    Text("Step 2 of 2")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
-
-            // Close button
-            Button {
-                onCancel()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.secondary)
-                    .font(.system(size: 18))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding()
-    }
-
-    private var headerTitle: String {
-        if isEditMode {
-            return "Edit Connection"
-        }
-        switch currentStep {
-        case .selectType:
-            return "Choose Connection Type"
-        case .fillDetails:
-            return "Configure \(selectedType.displayName)"
-        }
-    }
-
-    // MARK: - Step 1: Type Selection
-
-    private var typeSelectionView: some View {
-        VStack(spacing: 0) {
-            // Grid of connection types
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                    ForEach(ConnectionType.allCases, id: \.self) { type in
-                        ConnectionTypeCard(
-                            type: type,
-                            isSelected: selectedType == type
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                selectedType = type
-                                iconName = type.iconName
-                                if type == .sftp {
-                                    port = "22"
-                                }
+            Form {
+                // Type picker (only in create mode)
+                if !isEditMode {
+                    Section {
+                        Picker("Type", selection: $selectedType) {
+                            ForEach(ConnectionType.allCases, id: \.self) { type in
+                                Text(type.displayName).tag(type)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: selectedType) { _, newType in
+                            iconName = newType.iconName
+                            if newType == .sftp {
+                                port = "22"
                             }
                         }
                     }
-                }
-                .padding(24)
-            }
-
-            Divider()
-
-            // Footer
-            HStack {
-                Spacer()
-
-                Button("Cancel") {
-                    onCancel()
-                }
-                .keyboardShortcut(.cancelAction)
-
-                Button("Continue") {
-                    withAnimation {
-                        currentStep = .fillDetails
-                    }
-                }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-            }
-            .padding()
-        }
-    }
-
-    // MARK: - Step 2: Details Form
-
-    private var detailsFormView: some View {
-        VStack(spacing: 0) {
-            Form {
-                // Show selected type badge in edit mode or step 2
-                Section {
-                    HStack {
-                        Image(systemName: selectedType.iconName)
-                            .font(.system(size: 14))
-                            .foregroundStyle(.blue)
-                        Text(selectedType.displayName)
-                            .font(.system(size: 13, weight: .medium))
-                        Spacer()
-                        Text(selectedType.description)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 4)
                 }
 
                 // Connection details based on type
@@ -345,34 +204,26 @@ struct ConnectionFormSheet: View {
 
             // Footer
             HStack {
-                if !isEditMode {
-                    Button {
-                        withAnimation {
-                            currentStep = .selectType
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 11, weight: .semibold))
-                            Text("Back")
-                        }
-                    }
-                }
-
                 Spacer()
 
                 Button("Cancel") {
                     onCancel()
                 }
                 .keyboardShortcut(.cancelAction)
+                .buttonStyle(.glass)
 
                 Button(mode.saveButtonTitle) {
                     save()
                 }
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(.glassProminent)
                 .disabled(!isValid)
             }
             .padding()
+        }
+        .frame(width: 500, height: 580)
+        .onAppear {
+            loadExistingData()
         }
     }
 
@@ -420,9 +271,6 @@ struct ConnectionFormSheet: View {
                     password = saved
                 }
             }
-
-            // Skip to details in edit mode
-            currentStep = .fillDetails
         }
     }
 
@@ -508,66 +356,6 @@ struct ConnectionFormSheet: View {
     }
 }
 
-// MARK: - Connection Type Card
-struct ConnectionTypeCard: View {
-    let type: ConnectionType
-    let isSelected: Bool
-    let onSelect: () -> Void
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: onSelect) {
-            VStack(spacing: 12) {
-                // Icon
-                ZStack {
-                    Circle()
-                        .fill(isSelected ? .blue : .blue.opacity(0.1))
-                        .frame(width: 56, height: 56)
-
-                    Image(systemName: type.iconName)
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundStyle(isSelected ? .white : .blue)
-                }
-
-                // Text
-                VStack(spacing: 4) {
-                    Text(type.displayName)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.primary)
-
-                    Text(type.description)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
-            .padding(.horizontal, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? Color.blue.opacity(0.08) : (isHovering ? Color.primary.opacity(0.04) : Color.clear))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? Color.blue : Color.primary.opacity(0.15),
-                        lineWidth: isSelected ? 2 : 1
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovering = hovering
-        }
-        .animation(.easeInOut(duration: 0.1), value: isHovering)
-        .animation(.easeInOut(duration: 0.15), value: isSelected)
-    }
-}
-
 // MARK: - Icon Picker Row
 struct IconPickerRow: View {
     @Binding var selectedIcon: String
@@ -618,25 +406,23 @@ struct TagChip: View {
         HStack(spacing: 4) {
             Text(tag)
                 .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(isHovering ? .red : .primary)
 
-            Button {
-                onRemove()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(isHovering ? .red : .secondary)
-            }
-            .buttonStyle(.plain)
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(isHovering ? AnyShapeStyle(.red) : AnyShapeStyle(.tertiary))
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(.blue.opacity(0.1), in: Capsule())
-        .overlay {
-            Capsule()
-                .strokeBorder(.blue.opacity(0.2), lineWidth: 1)
-        }
+        .padding(.leading, 8)
+        .padding(.trailing, 5)
+        .padding(.vertical, 3)
+        .background(.fill.tertiary, in: Capsule())
         .onHover { hovering in
-            isHovering = hovering
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovering = hovering
+            }
+        }
+        .onTapGesture {
+            onRemove()
         }
     }
 }
@@ -697,7 +483,7 @@ struct FlowLayout: Layout {
 }
 
 // MARK: - Preview
-#Preview("Create - Step 1") {
+#Preview("Create") {
     ConnectionFormSheet(
         mode: .create,
         folders: [

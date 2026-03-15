@@ -437,8 +437,7 @@ final class ConnectionListViewModel {
     }
 
     func duplicateConnection(_ connection: Connection) async {
-        var newConnection = connection
-        newConnection = Connection(
+        let newConnection = Connection(
             name: "\(connection.name) Copy",
             host: connection.host,
             port: connection.port,
@@ -449,7 +448,11 @@ final class ConnectionListViewModel {
             description: connection.description,
             tags: connection.tags,
             iconName: connection.iconName,
-            folderId: connection.folderId
+            folderId: connection.folderId,
+            connectionType: connection.connectionType,
+            s3Region: connection.s3Region,
+            s3Bucket: connection.s3Bucket,
+            s3Endpoint: connection.s3Endpoint
         )
 
         // Copy password if saved
