@@ -67,8 +67,8 @@ struct NativeFileTableView: NSViewRepresentable {
         tableView.allowsMultipleSelection = true
         tableView.allowsColumnReordering = true
         tableView.allowsColumnResizing = true
-        tableView.rowHeight = 22
-        tableView.intercellSpacing = NSSize(width: 3, height: 2)
+        tableView.rowHeight = 28
+        tableView.intercellSpacing = NSSize(width: 6, height: 2)
         tableView.gridStyleMask = []
 
         // Set up actions
@@ -192,9 +192,9 @@ struct NativeFileTableView: NSViewRepresentable {
                     NSLayoutConstraint.activate([
                         imageView.leadingAnchor.constraint(equalTo: cell!.leadingAnchor, constant: 4),
                         imageView.centerYAnchor.constraint(equalTo: cell!.centerYAnchor),
-                        imageView.widthAnchor.constraint(equalToConstant: 16),
-                        imageView.heightAnchor.constraint(equalToConstant: 16),
-                        textField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 6),
+                        imageView.widthAnchor.constraint(equalToConstant: 20),
+                        imageView.heightAnchor.constraint(equalToConstant: 20),
+                        textField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 8),
                         textField.trailingAnchor.constraint(equalTo: cell!.trailingAnchor, constant: -4),
                         textField.centerYAnchor.constraint(equalTo: cell!.centerYAnchor)
                     ])

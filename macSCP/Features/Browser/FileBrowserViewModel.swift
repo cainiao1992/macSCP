@@ -442,14 +442,83 @@ final class FileBrowserViewModel {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        do {
-            try await fileRepository.download(remotePath: file.path, to: url)
-            AnalyticsService.trackFileDownloaded(protocol: .init(from: connection.connectionType), fileCount: 1, totalBytes: file.size)
-            logInfo("Downloaded: \(file.name)", category: connection.connectionType == .s3 ? .s3 : .sftp)
-        } catch {
-            logError("Download failed: \(error)", category: .sftp)
-            self.error = AppError.from(error)
+        let transferId = UUID()
+        let transfer = TransferProgress(
+            id: transferId,
+            fileName: file.name,
+            localURL: url,
+            remotePath: file.path,
+            bytesTransferred: 0,
+            totalBytes: file.size,
+            transferType: .download,
+            status: .inProgress
+        )
+        activeTransfers[transferId] = transfer
+        isShowingTransfersPopover = true
+
+        let downloadTask = Task { [weak self] in
+            guard let self = self else { return }
+
+            do {
+                try Task.checkCancellation()
+
+                try await self.fileRepository.download(remotePath: file.path, to: url) { [weak self] bytesTransferred in
+                    Task { @MainActor in
+                        guard self?.activeTransfers[transferId] != nil else { return }
+                        self?.activeTransfers[transferId]?.bytesTransferred = bytesTransferred
+                    }
+                }
+
+                try Task.checkCancellation()
+
+                await MainActor.run {
+                    if var completedTransfer = self.activeTransfers.removeValue(forKey: transferId) {
+                        completedTransfer.status = .completed
+                        completedTransfer.bytesTransferred = file.size
+                        self.recentTransfers.insert(completedTransfer, at: 0)
+                        if self.recentTransfers.count > 10 {
+                            self.recentTransfers = Array(self.recentTransfers.prefix(10))
+                        }
+                    }
+                    self.transferTasks.removeValue(forKey: transferId)
+                }
+
+                AnalyticsService.trackFileDownloaded(protocol: .init(from: self.connection.connectionType), fileCount: 1, totalBytes: file.size)
+                logInfo("Downloaded: \(file.name)", category: self.connection.connectionType == .s3 ? .s3 : .sftp)
+
+            } catch {
+                let isCancellation = error is CancellationError ||
+                    Task.isCancelled ||
+                    String(describing: error).contains("CancellationError")
+
+                if isCancellation {
+                    await MainActor.run {
+                        if var cancelledTransfer = self.activeTransfers.removeValue(forKey: transferId) {
+                            cancelledTransfer.status = .cancelled
+                            self.recentTransfers.insert(cancelledTransfer, at: 0)
+                        }
+                        self.transferTasks.removeValue(forKey: transferId)
+                    }
+                    logInfo("Download cancelled: \(file.name)", category: self.connection.connectionType == .s3 ? .s3 : .sftp)
+                } else {
+                    await MainActor.run {
+                        if var failedTransfer = self.activeTransfers.removeValue(forKey: transferId) {
+                            failedTransfer.status = .failed
+                            failedTransfer.error = error.localizedDescription
+                            self.recentTransfers.insert(failedTransfer, at: 0)
+                        }
+                        self.transferTasks.removeValue(forKey: transferId)
+                    }
+
+                    logError("Download failed: \(error)", category: self.connection.connectionType == .s3 ? .s3 : .sftp)
+                    await MainActor.run {
+                        self.error = AppError.from(error)
+                    }
+                }
+            }
         }
+
+        transferTasks[transferId] = downloadTask
     }
 
     func uploadFiles() async {
@@ -465,10 +534,7 @@ final class FileBrowserViewModel {
 
     /// Core upload method that handles multiple files with progress tracking
     private func uploadURLs(_ urls: [URL]) async {
-        // Show the transfers popover when starting uploads
-        if !urls.isEmpty {
-            isShowingTransfersPopover = true
-        }
+        var showedPopover = false
 
         for url in urls {
             guard url.isFileURL else { continue }
@@ -485,9 +551,16 @@ final class FileBrowserViewModel {
                 remotePath: remotePath,
                 bytesTransferred: 0,
                 totalBytes: fileSize,
+                transferType: .upload,
                 status: .inProgress
             )
             activeTransfers[transferId] = transfer
+
+            // Show the transfers popover once the first transfer is tracked
+            if !showedPopover {
+                isShowingTransfersPopover = true
+                showedPopover = true
+            }
 
             // Create a task for this upload so it can be cancelled
             let uploadTask = Task { [weak self] in
@@ -602,9 +675,47 @@ final class FileBrowserViewModel {
 
     /// Downloads a file to a specific URL (used for drag-out file promises)
     func downloadFileToURL(_ file: RemoteFile, destinationURL: URL) async throws {
-        try await fileRepository.download(remotePath: file.path, to: destinationURL)
-        AnalyticsService.trackFileDownloaded(protocol: .init(from: connection.connectionType), fileCount: 1, totalBytes: file.size)
-        logInfo("Downloaded via drag: \(file.name)", category: connection.connectionType == .s3 ? .s3 : .sftp)
+        let transferId = UUID()
+        let transfer = TransferProgress(
+            id: transferId,
+            fileName: file.name,
+            localURL: destinationURL,
+            remotePath: file.path,
+            bytesTransferred: 0,
+            totalBytes: file.size,
+            transferType: .download,
+            status: .inProgress
+        )
+        activeTransfers[transferId] = transfer
+        isShowingTransfersPopover = true
+
+        do {
+            try await fileRepository.download(remotePath: file.path, to: destinationURL) { [weak self] bytesTransferred in
+                Task { @MainActor in
+                    guard self?.activeTransfers[transferId] != nil else { return }
+                    self?.activeTransfers[transferId]?.bytesTransferred = bytesTransferred
+                }
+            }
+
+            if var completedTransfer = activeTransfers.removeValue(forKey: transferId) {
+                completedTransfer.status = .completed
+                completedTransfer.bytesTransferred = file.size
+                recentTransfers.insert(completedTransfer, at: 0)
+                if recentTransfers.count > 10 {
+                    recentTransfers = Array(recentTransfers.prefix(10))
+                }
+            }
+
+            AnalyticsService.trackFileDownloaded(protocol: .init(from: connection.connectionType), fileCount: 1, totalBytes: file.size)
+            logInfo("Downloaded via drag: \(file.name)", category: connection.connectionType == .s3 ? .s3 : .sftp)
+        } catch {
+            if var failedTransfer = activeTransfers.removeValue(forKey: transferId) {
+                failedTransfer.status = .failed
+                failedTransfer.error = error.localizedDescription
+                recentTransfers.insert(failedTransfer, at: 0)
+            }
+            throw error
+        }
     }
 
     /// Uploads files dropped from Finder into the current directory

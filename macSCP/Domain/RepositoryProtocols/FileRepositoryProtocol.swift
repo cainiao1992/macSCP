@@ -35,6 +35,9 @@ protocol FileRepositoryProtocol: Sendable {
     /// Downloads a file to local storage
     func download(remotePath: String, to localURL: URL) async throws
 
+    /// Downloads a file to local storage with progress reporting
+    func download(remotePath: String, to localURL: URL, progress: TransferProgressHandler?) async throws
+
     /// Uploads a file from local storage
     func upload(localURL: URL, to remotePath: String) async throws
 

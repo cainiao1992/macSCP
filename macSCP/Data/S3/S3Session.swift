@@ -389,6 +389,10 @@ actor S3Session: S3SessionProtocol {
     }
 
     func downloadFile(from remotePath: String, to localURL: URL) async throws {
+        try await downloadFile(from: remotePath, to: localURL, progress: nil)
+    }
+
+    func downloadFile(from remotePath: String, to localURL: URL, progress: TransferProgressHandler?) async throws {
         guard let s3 = s3 else {
             throw AppError.notConnected
         }
@@ -400,23 +404,25 @@ actor S3Session: S3SessionProtocol {
         do {
             let response = try await s3.getObject(request)
 
+            // Report initial progress
+            progress?(0)
+
             // Create/truncate local file
             FileManager.default.createFile(atPath: localURL.path, contents: nil)
             let fileHandle = try FileHandle(forWritingTo: localURL)
             defer { try? fileHandle.close() }
 
             // Stream the response body to disk in chunks
-            let chunkSize = FileOperationConstants.chunkSize
+            var bytesWritten: Int64 = 0
             for try await chunk in response.body {
+                try Task.checkCancellation()
+
                 let data = Data(buffer: chunk)
                 try fileHandle.write(contentsOf: data)
+                bytesWritten += Int64(data.count)
 
-                // If the chunk is much larger than our preferred size, we've received it all at once
-                // This is fine - we just write it directly
-                if data.count > chunkSize * 2 {
-                    // Already written above
-                    continue
-                }
+                // Report progress
+                progress?(bytesWritten)
             }
 
             log("Downloaded: \(remotePath) to \(localURL.path)")

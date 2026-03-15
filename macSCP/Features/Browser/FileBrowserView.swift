@@ -17,12 +17,7 @@ struct FileBrowserView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Toolbar
-            BrowserToolbar(viewModel: viewModel)
-
-            Divider()
-
-            // Breadcrumb
+            // Breadcrumb path bar
             BreadcrumbView(
                 components: viewModel.pathComponents,
                 onNavigate: { path in
@@ -43,6 +38,127 @@ struct FileBrowserView: View {
             statusBar
         }
         .frame(minWidth: WindowSize.minFileBrowser.width, minHeight: WindowSize.minFileBrowser.height)
+        .navigationTitle(viewModel.currentPath == "/" ? viewModel.connection.name : (viewModel.currentPath as NSString).lastPathComponent)
+        .navigationSubtitle(viewModel.isConnected ? viewModel.connection.connectionString : "Disconnected")
+        .toolbar(id: "browserToolbar") {
+            // Navigation group
+            ToolbarItem(id: "back", placement: .navigation) {
+                Button {
+                    Task { await viewModel.goBack() }
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .disabled(!viewModel.canGoBack)
+                .help("Go Back")
+            }
+
+            ToolbarItem(id: "forward", placement: .navigation) {
+                Button {
+                    Task { await viewModel.goForward() }
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .disabled(!viewModel.canGoForward)
+                .help("Go Forward")
+            }
+
+            // Primary actions
+            ToolbarItem(id: "newItem", placement: .primaryAction) {
+                Menu {
+                    Button {
+                        viewModel.isShowingNewFolderSheet = true
+                    } label: {
+                        Label("New Folder", systemImage: "folder.badge.plus")
+                    }
+
+                    Button {
+                        viewModel.isShowingNewFileSheet = true
+                    } label: {
+                        Label("New File", systemImage: "doc.badge.plus")
+                    }
+                } label: {
+                    Label("New", systemImage: "plus")
+                }
+                .help("New File or Folder")
+            }
+
+            ToolbarItem(id: "upload", placement: .primaryAction) {
+                Button {
+                    Task { await viewModel.uploadFiles() }
+                } label: {
+                    Label("Upload", systemImage: "square.and.arrow.up")
+                }
+                .help("Upload Files")
+            }
+
+            ToolbarItem(id: "delete", placement: .primaryAction) {
+                Button {
+                    viewModel.confirmDeleteSelected()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                .disabled(viewModel.selectedFiles.isEmpty)
+                .help("Delete Selected")
+            }
+
+            ToolbarItem(id: "spacer1", placement: .primaryAction) {
+                Spacer()
+            }
+
+            // Terminal button (SFTP only)
+            ToolbarItem(id: "terminal", placement: .primaryAction) {
+                if viewModel.connection.connectionType == .sftp {
+                    Button {
+                        viewModel.openTerminal()
+                    } label: {
+                        Label("Terminal", systemImage: "terminal")
+                    }
+                    .disabled(!viewModel.isConnected)
+                    .help("Open Terminal")
+                }
+            }
+
+            // Transfers
+            ToolbarItem(id: "transfers", placement: .primaryAction) {
+                TransfersToolbarButton(viewModel: viewModel)
+            }
+
+            // View options
+            ToolbarItem(id: "hiddenFiles", placement: .primaryAction) {
+                Toggle(isOn: $viewModel.showHiddenFiles) {
+                    Label(
+                        viewModel.showHiddenFiles ? "Hide Hidden Files" : "Show Hidden Files",
+                        systemImage: viewModel.showHiddenFiles ? "eye.fill" : "eye.slash"
+                    )
+                }
+                .help("Toggle Hidden Files")
+            }
+
+            ToolbarItem(id: "sort", placement: .primaryAction) {
+                Menu {
+                    ForEach(RemoteFile.SortCriteria.allCases, id: \.self) { criteria in
+                        Button {
+                            if viewModel.sortCriteria == criteria {
+                                viewModel.sortAscending.toggle()
+                            } else {
+                                viewModel.sortCriteria = criteria
+                                viewModel.sortAscending = true
+                            }
+                        } label: {
+                            HStack {
+                                Text(criteria.rawValue)
+                                if viewModel.sortCriteria == criteria {
+                                    Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Sort", systemImage: "arrow.up.arrow.down")
+                }
+                .help("Sort Options")
+            }
+        }
         .task {
             await viewModel.connect()
         }
@@ -130,15 +246,11 @@ struct FileBrowserView: View {
             LoadingView(message: viewModel.isConnected ? "Loading..." : "Connecting...")
 
         case .success:
-            if viewModel.sortedFiles.isEmpty {
-                EmptyStateView.noFiles
-            } else {
-                FileListView(
-                    viewModel: viewModel,
-                    onOpenEditor: openFileInEditor,
-                    onGetInfo: showFileInfo
-                )
-            }
+            FileListView(
+                viewModel: viewModel,
+                onOpenEditor: openFileInEditor,
+                onGetInfo: showFileInfo
+            )
 
         case .error(let error):
             ErrorView(error: error) {
@@ -154,25 +266,15 @@ struct FileBrowserView: View {
     }
 
     private var statusBar: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             // Connection status
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: viewModel.isConnected
-                                ? [.green.opacity(0.8), .green]
-                                : [.red.opacity(0.8), .red],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 4
-                        )
-                    )
-                    .frame(width: 8, height: 8)
-                    .shadow(color: viewModel.isConnected ? .green.opacity(0.5) : .red.opacity(0.5), radius: 2)
+                    .fill(viewModel.isConnected ? Color.green : Color.red)
+                    .frame(width: 7, height: 7)
 
-                Text(viewModel.isConnected ? viewModel.connection.connectionString : "Disconnected")
-                    .font(.system(size: 11, weight: .medium))
+                Text(viewModel.isConnected ? "Connected" : "Disconnected")
+                    .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
 
@@ -191,7 +293,7 @@ struct FileBrowserView: View {
             Spacer()
 
             // File count
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Text("\(viewModel.sortedFiles.count) items")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
@@ -199,16 +301,13 @@ struct FileBrowserView: View {
                 if !viewModel.selectedFiles.isEmpty {
                     Text("\(viewModel.selectedFiles.count) selected")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(.blue.opacity(0.1), in: Capsule())
+                        .foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.bar)
     }
 
     private func openFileInEditor(_ file: RemoteFile) {
@@ -232,24 +331,14 @@ struct ClipboardStatusView: View {
     let displayText: String
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "doc.on.clipboard.fill")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.blue)
+        HStack(spacing: 4) {
+            Image(systemName: "doc.on.clipboard")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
 
             Text(displayText)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.primary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
-        .background {
-            Capsule()
-                .fill(.blue.opacity(0.1))
-                .overlay {
-                    Capsule()
-                        .strokeBorder(.blue.opacity(0.2), lineWidth: 1)
-                }
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -262,37 +351,19 @@ struct ActiveTransfersIndicator: View {
         Button {
             viewModel.isShowingTransfersPopover = true
         } label: {
-            HStack(spacing: 8) {
-                // Upload icon with animation
+            HStack(spacing: 6) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11))
                     .foregroundStyle(.blue)
                     .symbolEffect(.pulse, options: .repeating)
 
-                // Transfer count and overall progress
-                Text("Uploading \(viewModel.activeTransferCount) file\(viewModel.activeTransferCount == 1 ? "" : "s")")
-                    .font(.system(size: 11, weight: .medium))
-
-                // Overall progress bar
                 ProgressView(value: viewModel.overallProgress)
                     .progressViewStyle(.linear)
-                    .frame(width: 60)
+                    .frame(width: 50)
 
-                // Percentage
                 Text("\(Int(viewModel.overallProgress * 100))%")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .frame(width: 30, alignment: .trailing)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background {
-                Capsule()
-                    .fill(.blue.opacity(0.1))
-                    .overlay {
-                        Capsule()
-                            .strokeBorder(.blue.opacity(0.3), lineWidth: 1)
-                    }
             }
         }
         .buttonStyle(.plain)

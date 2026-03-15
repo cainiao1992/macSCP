@@ -2,7 +2,7 @@
 //  BreadcrumbView.swift
 //  macSCP
 //
-//  Breadcrumb navigation for the file browser - Modern macOS style
+//  Finder-style path bar for the file browser
 //
 
 import SwiftUI
@@ -16,42 +16,22 @@ struct BreadcrumbView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
+                HStack(spacing: 0) {
                     // Root
-                    BreadcrumbItem(
-                        icon: "externaldrive.fill",
-                        isHovered: hoveredPath == "/",
-                        isLast: components.isEmpty
-                    ) {
-                        onNavigate("/")
-                    }
-                    .onHover { hovering in
-                        hoveredPath = hovering ? "/" : nil
-                    }
+                    pathButton(icon: "externaldrive.fill", path: "/", isLast: components.isEmpty)
 
                     ForEach(components) { component in
-                        // Separator
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(.quaternary)
-                            .padding(.horizontal, 2)
+                            .padding(.horizontal, 1)
 
-                        // Path component
-                        BreadcrumbItem(
-                            text: component.name,
-                            isHovered: hoveredPath == component.path,
-                            isLast: component.path == components.last?.path
-                        ) {
-                            onNavigate(component.path)
-                        }
-                        .onHover { hovering in
-                            hoveredPath = hovering ? component.path : nil
-                        }
-                        .id(component.path)
+                        pathButton(text: component.name, path: component.path, isLast: component.path == components.last?.path)
+                            .id(component.path)
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.vertical, 4)
             }
             .onChange(of: components) { _, newComponents in
                 if let lastPath = newComponents.last?.path {
@@ -61,49 +41,50 @@ struct BreadcrumbView: View {
                 }
             }
         }
-        .background(.ultraThinMaterial)
+        .frame(height: 28)
+        .background(.bar)
     }
-}
 
-// MARK: - Breadcrumb Item
-struct BreadcrumbItem: View {
-    var icon: String?
-    var text: String?
-    let isHovered: Bool
-    let isLast: Bool
-    let action: () -> Void
+    @ViewBuilder
+    private func pathButton(icon: String? = nil, text: String? = nil, path: String, isLast: Bool) -> some View {
+        let isHovered = hoveredPath == path
 
-    var body: some View {
-        Button(action: action) {
+        Button {
+            onNavigate(path)
+        } label: {
             Group {
                 if let icon = icon {
                     Image(systemName: icon)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                 } else if let text = text {
                     Text(text)
-                        .font(.system(size: 12, weight: isLast ? .semibold : .medium))
+                        .font(.system(size: 12, weight: isLast ? .medium : .regular))
                 }
             }
-            .foregroundStyle(isLast ? .primary : .secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .foregroundStyle(isLast ? .primary : .tertiary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
             .background {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(isHovered ? Color.primary.opacity(0.08) : .clear)
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(isHovered ? Color.primary.opacity(0.06) : .clear)
             }
         }
         .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .onHover { hovering in
+            hoveredPath = hovering ? path : nil
+        }
     }
 }
 
 // MARK: - Preview
 #Preview {
-    VStack(spacing: 16) {
+    VStack(spacing: 0) {
         BreadcrumbView(
             components: [],
             onNavigate: { _ in }
         )
+
+        Divider()
 
         BreadcrumbView(
             components: [
@@ -113,6 +94,8 @@ struct BreadcrumbItem: View {
             ],
             onNavigate: { _ in }
         )
+
+        Divider()
 
         BreadcrumbView(
             components: [
