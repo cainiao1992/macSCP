@@ -39,6 +39,14 @@ final class TerminalViewModel {
 
     let connectionName: String
 
+    /// Connection string displayed in the subtitle (e.g. "user@host")
+    var connectionString: String {
+        "\(connectionData.username)@\(connectionData.host)"
+    }
+
+    /// Current terminal dimensions as a display string (e.g. "80 x 24")
+    private(set) var terminalSizeText: String = TerminalSize.default.displayString
+
     // MARK: - Dependencies
     private let session: TerminalSessionProtocol
     private let connectionData: TerminalWindowData
@@ -195,6 +203,7 @@ final class TerminalViewModel {
         guard columns > 0 && rows > 0 else { return }
 
         currentSize = TerminalSize(columns: columns, rows: rows)
+        terminalSizeText = currentSize.displayString
 
         guard isConnected else { return }
 

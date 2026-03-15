@@ -13,6 +13,10 @@ struct TerminalSize: Sendable, Equatable {
     let rows: Int
 
     static let `default` = TerminalSize(columns: 80, rows: 24)
+
+    var displayString: String {
+        "\(columns) × \(rows)"
+    }
 }
 
 /// Protocol for terminal session implementations
