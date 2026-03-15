@@ -24,7 +24,7 @@ final class ConnectionListViewModel {
 
     var selectedSidebarItem: SidebarSelection = .allConnections
     var searchText: String = ""
-    var selectedConnections: Set<UUID> = []
+    var selectedConnectionId: UUID?
 
     // Sheet states
     var isShowingNewConnectionSheet = false
@@ -94,6 +94,11 @@ final class ConnectionListViewModel {
 
     func connectionCount(for folderId: UUID) -> Int {
         connections.filter { $0.folderId == folderId }.count
+    }
+
+    var selectedConnection: Connection? {
+        guard let id = selectedConnectionId else { return nil }
+        return connections.first { $0.id == id }
     }
 
     var selectedFolder: Folder? {
@@ -196,6 +201,9 @@ final class ConnectionListViewModel {
             } else {
                 try? keychainService.deletePassword(for: connection.id)
             }
+            if selectedConnectionId == connection.id {
+                selectedConnectionId = nil
+            }
             await loadData()
             AnalyticsService.track(.connectionDeleted, with: [
                 "protocol": AnalyticsService.ConnectionProtocol(from: connection.connectionType).rawValue
@@ -205,15 +213,6 @@ final class ConnectionListViewModel {
             logError("Failed to delete connection: \(error)", category: .database)
             self.error = AppError.from(error)
         }
-    }
-
-    func deleteSelectedConnections() async {
-        for id in selectedConnections {
-            if let connection = connections.first(where: { $0.id == id }) {
-                await deleteConnection(connection)
-            }
-        }
-        selectedConnections.removeAll()
     }
 
     func moveConnection(_ connection: Connection, to folder: Folder?) async {

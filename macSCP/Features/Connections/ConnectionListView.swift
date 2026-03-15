@@ -16,33 +16,61 @@ struct ConnectionListView: View {
         self.viewModel = viewModel
     }
 
-    var body: some View {
-        NavigationSplitView {
-            SidebarView(viewModel: viewModel)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
-        } detail: {
-            ConnectionGridView(viewModel: viewModel)
-        }
-        .navigationTitle("")
-        .toolbarBackground(.hidden, for: .windowToolbar)
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    viewModel.isShowingNewConnectionSheet = true
-                } label: {
-                    Label("New Connection", systemImage: "plus")
-                }
-
-                Button {
+    @ViewBuilder
+    private var detailColumn: some View {
+        if let connection = viewModel.selectedConnection {
+            ConnectionDetailView(
+                connection: connection,
+                onConnect: {
+                    viewModel.connectToServer(connection)
+                },
+                onOpenTerminal: {
+                    viewModel.requestTerminal(for: connection)
+                },
+                onEdit: {
+                    viewModel.editConnection(connection)
+                },
+                onDuplicate: {
                     Task {
-                        await viewModel.refresh()
+                        await viewModel.duplicateConnection(connection)
                     }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                },
+                onDelete: {
+                    Task {
+                        await viewModel.deleteConnection(connection)
+                    }
+                }
+            )
+        } else {
+            ContentUnavailableView(
+                "No Connection Selected",
+                systemImage: "server.rack",
+                description: Text("Select a connection to view its details.")
+            )
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Color.clear.frame(width: 0, height: 0)
                 }
             }
         }
+    }
+
+    var body: some View {
+        NavigationSplitView {
+            SidebarView(viewModel: viewModel)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
+        } content: {
+            ConnectionListColumn(viewModel: viewModel)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 400)
+        } detail: {
+            detailColumn
+        }
+        .navigationTitle("")
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .searchable(text: $viewModel.searchText, prompt: "Search connections")
+        .onChange(of: viewModel.selectedSidebarItem) {
+            viewModel.selectedConnectionId = nil
+        }
         .task {
             await viewModel.loadData()
         }
