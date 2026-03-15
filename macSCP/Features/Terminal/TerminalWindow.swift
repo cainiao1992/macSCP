@@ -33,7 +33,6 @@ struct TerminalWindow: View {
                 .padding(32)
             } else if let viewModel = viewModel {
                 TerminalContentView(viewModel: viewModel)
-                    .navigationTitle("\(viewModel.connectionName) - Terminal")
             } else {
                 LoadingView(message: "Initializing...")
                     .task {

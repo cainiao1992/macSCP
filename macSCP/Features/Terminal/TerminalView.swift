@@ -16,15 +16,30 @@ struct TerminalContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Toolbar
-            terminalToolbar
+            // Terminal content
+            terminalContent
 
             Divider()
 
-            // Terminal content
-            terminalContent
+            // Status bar
+            statusBar
         }
         .frame(minWidth: WindowSize.minTerminal.width, minHeight: WindowSize.minTerminal.height)
+        .navigationTitle(viewModel.connectionName)
+        .navigationSubtitle(statusText)
+        .toolbar(id: "terminalToolbar") {
+            ToolbarItem(id: "reconnect", placement: .primaryAction) {
+                Button {
+                    Task {
+                        await viewModel.reconnect()
+                    }
+                } label: {
+                    Label("Reconnect", systemImage: "arrow.clockwise")
+                }
+                .disabled(viewModel.state == .connecting)
+                .help("Reconnect")
+            }
+        }
         .task {
             await viewModel.connect()
         }
@@ -36,35 +51,23 @@ struct TerminalContentView: View {
         .errorAlert($viewModel.error)
     }
 
-    @ViewBuilder
-    private var terminalToolbar: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 8, height: 8)
+    private var statusBar: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 7, height: 7)
 
-            Text(statusText)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-
-            Button {
-                Task {
-                    await viewModel.reconnect()
-                }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11, weight: .medium))
+                Text(statusText)
+                    .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .disabled(viewModel.state == .connecting)
-            .help("Reconnect")
 
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.bar)
     }
 
     @ViewBuilder
