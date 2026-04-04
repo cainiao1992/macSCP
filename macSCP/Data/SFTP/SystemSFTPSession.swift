@@ -19,6 +19,7 @@ actor SystemSFTPSession: SFTPSessionProtocol {
     private var privateKeyPath: String = ""
     private(set) var isConnected = false
     private(set) var currentPath = "/"
+    private var homePath = "/"
 
     init() {}
 
@@ -36,10 +37,8 @@ actor SystemSFTPSession: SFTPSessionProtocol {
         self.username = username
         self.privateKeyPath = privateKeyPath
         self.isConnected = true
-
-        // Verify connection and get home directory
         currentPath = try await executeSSHCommand("pwd")
-
+        homePath = currentPath
         logInfo("System SFTP connected to \(host)", category: .sftp)
     }
 
@@ -47,14 +46,14 @@ actor SystemSFTPSession: SFTPSessionProtocol {
         logInfo("System SFTP disconnecting", category: .sftp)
         isConnected = false
         currentPath = "/"
+        homePath = "/"
     }
 
     // MARK: - File Operations
 
     func listFiles(at path: String) async throws -> [RemoteFile] {
         let resolvedPath = resolvePath(path)
-        // Use --time-style for year-inclusive timestamps
-        // Fallback to standard ls -la if not supported
+        currentPath = resolvedPath
         let output = try await executeSSHCommand("ls -la --time-style='+%Y-%m-%d %H:%M:%S' '\(escaped(resolvedPath))' 2>/dev/null || ls -la '\(escaped(resolvedPath))'")
 
         var files: [RemoteFile] = []
@@ -176,7 +175,9 @@ actor SystemSFTPSession: SFTPSessionProtocol {
 
     func getRealPath(at path: String) async throws -> String {
         let resolvedPath = resolvePath(path)
-        return try await executeSSHCommand("cd '\(escaped(resolvedPath))' 2>/dev/null && pwd || echo '\(escaped(resolvedPath))'")
+        let realPath = try await executeSSHCommand("cd '\(escaped(resolvedPath))' 2>/dev/null && pwd || echo '\(escaped(resolvedPath))'")
+        currentPath = realPath
+        return realPath
     }
 
     func executeCommand(_ command: String) async throws -> String {
@@ -246,7 +247,7 @@ actor SystemSFTPSession: SFTPSessionProtocol {
 
     private func resolvePath(_ path: String) -> String {
         if path.hasPrefix("/") { return path }
-        if path == "." || path == "~" { return currentPath }
+        if path == "." || path == "~" { return homePath }
         if path == ".." {
             let components = currentPath.split(separator: "/")
             if components.count > 1 {
@@ -283,21 +284,16 @@ actor SystemSFTPSession: SFTPSessionProtocol {
 
         let comp5 = String(components[5])
 
-        // Detect format: `2024-01-15` contains `-` and has 10 chars
         if comp5.contains("-") && comp5.count >= 10 {
-            // --time-style format: components[5]="2024-01-15", [6]="14:30:45", [7+]=filename
             guard components.count >= 8 else { return nil }
             let dateStr = "\(comp5) \(components[6])"
             dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
             modDate = dateFormatter.date(from: dateStr)
         } else {
-            // Standard ls -la: components[5]="Jan", [6]="15", [7]="14:30", [8+]=filename
             guard components.count >= 9 else { return nil }
             let dateStr = "\(components[5]) \(components[6]) \(components[7])"
             dateFormatter.dateFormat = "MMM dd HH:mm"
             modDate = dateFormatter.date(from: dateStr)
-            // ls -la omits year for recent files, defaulting to 2000.
-            // Use current year as fallback.
             if var date = modDate, Calendar.current.component(.year, from: date) == 2000 {
                 var comps = Calendar.current.dateComponents([.month, .day, .hour, .minute, .second], from: date)
                 comps.year = Calendar.current.component(.year, from: Date())
@@ -305,7 +301,6 @@ actor SystemSFTPSession: SFTPSessionProtocol {
             }
         }
 
-        // Name starts at component 7 for --time-style, component 8 for standard
         let nameStartIndex = comp5.contains("-") && comp5.count >= 10 ? 7 : 8
         let name = components[nameStartIndex...]
             .joined(separator: " ")
