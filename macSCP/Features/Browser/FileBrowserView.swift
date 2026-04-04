@@ -105,6 +105,14 @@ struct FileBrowserView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .navigation) {
                     Button {
+                        Task { await viewModel.goHome() }
+                    } label: {
+                        Image(systemName: "house")
+                    }
+                    .disabled(!viewModel.isConnected)
+                    .help("Go Home")
+                    
+                    Button {
                         Task { await viewModel.goBack() }
                     } label: {
                         Image(systemName: "chevron.left")
