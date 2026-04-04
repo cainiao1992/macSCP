@@ -70,6 +70,7 @@ actor TerminalSession: TerminalSessionProtocol {
                 authenticationMethod: authMethod,
                 hostKeyValidator: .acceptAnything(),
                 reconnect: .never,
+                algorithms: .all,
                 group: group
             )
 
@@ -126,6 +127,7 @@ actor TerminalSession: TerminalSessionProtocol {
                 authenticationMethod: authMethod,
                 hostKeyValidator: .acceptAnything(),
                 reconnect: .never,
+                algorithms: .all,
                 group: group
             )
 

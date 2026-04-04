@@ -54,7 +54,7 @@ struct TerminalWindow: View {
         }
 
         let container = DependencyContainer.shared
-        let session = container.makeTerminalSession()
+        let session = container.makeTerminalSession(connectionData: data)
 
         viewModel = container.makeTerminalViewModel(
             connectionName: data.connectionName,

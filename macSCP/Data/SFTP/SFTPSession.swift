@@ -10,6 +10,7 @@ import Citadel
 import NIO
 import NIOCore
 import NIOFoundationCompat
+import NIOSSH
 
 actor SFTPSession: SFTPSessionProtocol {
     private var client: SSHClient?
@@ -47,6 +48,7 @@ actor SFTPSession: SFTPSessionProtocol {
                 authenticationMethod: authMethod,
                 hostKeyValidator: .acceptAnything(),
                 reconnect: .never,
+                algorithms: .all,
                 group: group
             )
 
@@ -85,9 +87,6 @@ actor SFTPSession: SFTPSessionProtocol {
                 throw AppError.authenticationFailed
             }
 
-            // Note: Citadel's RSA private key init doesn't support passphrase directly
-            // For passphrase-protected keys, they need to be decrypted first or use OpenSSH format
-            // The library expects unencrypted PEM or OpenSSH format keys
             let authMethod: SSHAuthenticationMethod = try .rsa(
                 username: username,
                 privateKey: .init(sshRsa: privateKeyString)
@@ -99,6 +98,7 @@ actor SFTPSession: SFTPSessionProtocol {
                 authenticationMethod: authMethod,
                 hostKeyValidator: .acceptAnything(),
                 reconnect: .never,
+                algorithms: .all,
                 group: group
             )
 
