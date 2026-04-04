@@ -88,7 +88,7 @@ struct FileEditorWindow: View {
                 s3Session = session
             } else {
                 // SFTP connection
-                let session = container.makeSFTPSession()
+                let session = container.makeSFTPSession(privateKeyPath: data.privateKeyPath)
                 switch data.authMethod {
                 case .password:
                     try await session.connect(
