@@ -150,7 +150,7 @@ actor SystemSFTPSession: SFTPSessionProtocol {
             "-i", privateKeyPath,
             "-P", String(port),
             localPath,
-            "\(username)@\(host):'\(escaped(resolvedPath))'"
+            "\(username)@\(host):\(resolvedPath)"
         ]
 
         try process.run()
