@@ -71,6 +71,6 @@ private struct StatItem: View {
         filePath: "/home/user/documents/test.txt",
         fileName: "test.txt",
         initialContent: "Hello, World!",
-        fileRepository: FileRepository(sftpSession: SFTPSession())
+        fileRepository: FileRepository(sftpSession: SystemSFTPSession())
     ))
 }

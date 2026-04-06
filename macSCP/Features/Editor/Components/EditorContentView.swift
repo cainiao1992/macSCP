@@ -28,6 +28,6 @@ struct EditorContentView: View {
 
         hello();
         """,
-        fileRepository: FileRepository(sftpSession: SFTPSession())
+        fileRepository: FileRepository(sftpSession: SystemSFTPSession())
     ))
 }

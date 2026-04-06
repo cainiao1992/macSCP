@@ -66,6 +66,6 @@ struct FileEditorView: View {
         filePath: "/home/user/test.txt",
         fileName: "test.txt",
         initialContent: "Hello, World!\n\nThis is a test file.",
-        fileRepository: FileRepository(sftpSession: SFTPSession())
+        fileRepository: FileRepository(sftpSession: SystemSFTPSession())
     ))
 }

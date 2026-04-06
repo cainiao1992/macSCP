@@ -37,7 +37,7 @@ struct FileListView: View {
     FileListView(
         viewModel: DependencyContainer.shared.makeFileBrowserViewModel(
             connection: Connection(name: "Test", host: "localhost", username: "user"),
-            sftpSession: SFTPSession(),
+            sftpSession: SystemSFTPSession(),
             password: "test"
         ),
         onOpenEditor: { _ in },

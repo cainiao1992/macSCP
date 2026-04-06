@@ -362,7 +362,7 @@ struct SwiftTermView: NSViewRepresentable {
     TerminalContentView(
         viewModel: TerminalViewModel(
             connectionName: "Test Server",
-            session: TerminalSession(),
+            session: SystemTerminalSession(),
             connectionData: TerminalWindowData(
                 connectionId: UUID(),
                 connectionName: "Test",

@@ -380,7 +380,7 @@ struct ActiveTransfersIndicator: View {
     FileBrowserView(
         viewModel: DependencyContainer.shared.makeFileBrowserViewModel(
             connection: Connection(name: "Test", host: "localhost", username: "user"),
-            sftpSession: SFTPSession(),
+            sftpSession: SystemSFTPSession(),
             password: "test"
         )
     )
