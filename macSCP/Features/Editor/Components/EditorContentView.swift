@@ -11,10 +11,7 @@ struct EditorContentView: View {
     @Bindable var viewModel: FileEditorViewModel
 
     var body: some View {
-        TextEditor(text: $viewModel.content)
-            .font(.system(.body, design: .monospaced))
-            .scrollContentBackground(.hidden)
-            .background(Color(.textBackgroundColor))
+        SyntaxHighlightingTextView(viewModel: viewModel)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

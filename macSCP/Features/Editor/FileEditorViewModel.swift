@@ -30,6 +30,10 @@ final class FileEditorViewModel {
     var isCaseSensitive: Bool = false
     var isWholeWord: Bool = false
 
+    // Pending replacement state — used by Coordinator to perform replaces via NSTextView
+    var pendingSingleReplace: (range: Range<String.Index>, text: String)?
+    var pendingReplaceAll: [(range: Range<String.Index>, text: String)]?
+
     // MARK: - Dependencies
     private let fileRepository: FileRepositoryProtocol
     private let s3Session: S3SessionProtocol?
@@ -81,6 +85,10 @@ final class FileEditorViewModel {
 
     var wordCount: Int {
         content.split { $0.isWhitespace || $0.isNewline }.count
+    }
+
+    var detectedLanguage: String? {
+        LanguageDetectionService.language(for: fileName)
     }
 
     var currentSearchResult: Range<String.Index>? {
@@ -142,6 +150,7 @@ final class FileEditorViewModel {
         guard !searchText.isEmpty else {
             searchResults = []
             currentSearchIndex = 0
+            NotificationCenter.default.post(name: .editorSearchStateChanged, object: self)
             return
         }
 
@@ -154,7 +163,6 @@ final class FileEditorViewModel {
         var searchRange = content.startIndex..<content.endIndex
 
         while let range = content.range(of: searchText, options: options, range: searchRange) {
-            // Check whole word if enabled
             if isWholeWord {
                 let isWordBoundaryBefore = range.lowerBound == content.startIndex ||
                     !content[content.index(before: range.lowerBound)].isLetter
@@ -173,23 +181,26 @@ final class FileEditorViewModel {
 
         searchResults = results
         currentSearchIndex = results.isEmpty ? 0 : 0
+        NotificationCenter.default.post(name: .editorSearchStateChanged, object: self)
     }
 
     func findNext() {
         guard !searchResults.isEmpty else { return }
         currentSearchIndex = (currentSearchIndex + 1) % searchResults.count
+        NotificationCenter.default.post(name: .editorSearchStateChanged, object: self)
     }
 
     func findPrevious() {
         guard !searchResults.isEmpty else { return }
         currentSearchIndex = (currentSearchIndex - 1 + searchResults.count) % searchResults.count
+        NotificationCenter.default.post(name: .editorSearchStateChanged, object: self)
     }
 
     func replaceCurrent() {
         guard let range = currentSearchResult else { return }
-
-        content.replaceSubrange(range, with: replaceText)
-        search()
+        pendingSingleReplace = (range: range, text: replaceText)
+        // Do NOT mutate content here — Coordinator will perform via NSTextView
+        // textDidChange will sync content back, then search() will be triggered
     }
 
     func replaceAll() {
@@ -200,39 +211,26 @@ final class FileEditorViewModel {
             options.insert(.caseInsensitive)
         }
 
-        if isWholeWord {
-            // Replace manually with word boundary check
-            var newContent = ""
-            var currentIndex = content.startIndex
+        var replacements: [(range: Range<String.Index>, text: String)] = []
+        var searchRange = content.startIndex..<content.endIndex
 
-            while currentIndex < content.endIndex {
-                if let range = content.range(of: searchText, options: options, range: currentIndex..<content.endIndex) {
-                    let isWordBoundaryBefore = range.lowerBound == content.startIndex ||
-                        !content[content.index(before: range.lowerBound)].isLetter
-                    let isWordBoundaryAfter = range.upperBound == content.endIndex ||
-                        !content[range.upperBound].isLetter
-
-                    newContent += content[currentIndex..<range.lowerBound]
-
-                    if isWordBoundaryBefore && isWordBoundaryAfter {
-                        newContent += replaceText
-                    } else {
-                        newContent += content[range]
-                    }
-
-                    currentIndex = range.upperBound
-                } else {
-                    newContent += content[currentIndex..<content.endIndex]
-                    break
+        while let range = content.range(of: searchText, options: options, range: searchRange) {
+            if isWholeWord {
+                let isWordBoundaryBefore = range.lowerBound == content.startIndex ||
+                    !content[content.index(before: range.lowerBound)].isLetter
+                let isWordBoundaryAfter = range.upperBound == content.endIndex ||
+                    !content[range.upperBound].isLetter
+                if isWordBoundaryBefore && isWordBoundaryAfter {
+                    replacements.append((range: range, text: replaceText))
                 }
+            } else {
+                replacements.append((range: range, text: replaceText))
             }
-
-            content = newContent
-        } else {
-            content = content.replacingOccurrences(of: searchText, with: replaceText, options: options)
+            searchRange = range.upperBound..<content.endIndex
         }
 
-        search()
+        pendingReplaceAll = replacements
+        // Do NOT mutate content — Coordinator will perform via NSTextView in reverse order
     }
 
     func toggleSearch() {
@@ -243,6 +241,7 @@ final class FileEditorViewModel {
             searchResults = []
             currentSearchIndex = 0
         }
+        NotificationCenter.default.post(name: .editorSearchStateChanged, object: self)
     }
 
     // MARK: - UI Actions
