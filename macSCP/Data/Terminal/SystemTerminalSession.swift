@@ -17,6 +17,8 @@ actor SystemTerminalSession: TerminalSessionProtocol {
     private var _outputStream: AsyncStream<Data>?
     private var currentSize: TerminalSize = TerminalSize(columns: 80, rows: 24)
     private var readTask: Task<Void, Never>?
+    private var pendingPassword: String?
+    private var passwordPromptPending = false
     private(set) var isConnected = false
     private(set) var sessionEndedGracefully = false
 
@@ -41,7 +43,88 @@ actor SystemTerminalSession: TerminalSessionProtocol {
         password: String,
         terminalSize: TerminalSize
     ) async throws {
-        throw AppError.connectionFailed("System session requires private key authentication")
+        logInfo("System terminal connecting to \(username)@\(host):\(port) via password", category: .network)
+
+        currentSize = terminalSize
+        sessionEndedGracefully = false
+        pendingPassword = password
+        passwordPromptPending = true
+        _ = await outputStream
+
+        let fd = posix_openpt(O_RDWR)
+        guard fd >= 0 else {
+            throw AppError.terminalConnectionFailed("Failed to open PTY")
+        }
+        guard grantpt(fd) == 0, unlockpt(fd) == 0 else {
+            close(fd)
+            throw AppError.terminalConnectionFailed("Failed to configure PTY")
+        }
+
+        let slaveName = ptsname(fd)
+        guard let slaveName = slaveName else {
+            close(fd)
+            throw AppError.terminalConnectionFailed("Failed to get PTY name")
+        }
+
+        var winsize = winsize(
+            ws_row: UInt16(currentSize.rows),
+            ws_col: UInt16(currentSize.columns),
+            ws_xpixel: 0,
+            ws_ypixel: 0
+        )
+        _ = ioctl(fd, TIOCSWINSZ, &winsize)
+
+        let sshArgs: [String] = [
+            "/usr/bin/ssh",
+            "-t",
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-o", "ServerAliveInterval=30",
+            "-o", "ServerAliveCountMax=3",
+            "-o", "BatchMode=no",
+            "-p", String(port),
+            "\(username)@\(host)"
+        ]
+
+        let argv: [UnsafeMutablePointer<CChar>?] = sshArgs.map { strdup($0) } + [nil]
+        let envp = environ
+
+        var fileActions: posix_spawn_file_actions_t?
+        posix_spawn_file_actions_init(&fileActions)
+
+        posix_spawn_file_actions_addopen(&fileActions, STDIN_FILENO, slaveName, O_RDWR, 0)
+        posix_spawn_file_actions_addopen(&fileActions, STDOUT_FILENO, slaveName, O_RDWR, 0)
+        posix_spawn_file_actions_addopen(&fileActions, STDERR_FILENO, slaveName, O_RDWR, 0)
+
+        var attrs: posix_spawnattr_t?
+        posix_spawnattr_init(&attrs)
+        posix_spawnattr_setflags(&attrs, Int16(POSIX_SPAWN_SETPGROUP))
+
+        var pid: pid_t = 0
+        let spawnResult = argv.withUnsafeBufferPointer { argvPtr in
+            posix_spawn(&pid, "/usr/bin/ssh", &fileActions, &attrs,
+                       UnsafeMutablePointer(mutating: argvPtr.baseAddress), envp)
+        }
+
+        for arg in argv where arg != nil {
+            free(arg)
+        }
+        posix_spawnattr_destroy(&attrs)
+        posix_spawn_file_actions_destroy(&fileActions)
+
+        guard spawnResult == 0 else {
+            close(fd)
+            throw AppError.terminalConnectionFailed("posix_spawn failed with error code \(spawnResult)")
+        }
+
+        masterFD = fd
+        childPID = pid
+        isConnected = true
+
+        _ = fcntl(masterFD, F_SETFL, fcntl(masterFD, F_GETFL) | O_NONBLOCK)
+
+        startReading()
+
+        logInfo("System terminal connected to \(host) via password auth", category: .network)
     }
 
     func connect(
@@ -159,6 +242,20 @@ actor SystemTerminalSession: TerminalSessionProtocol {
 
                 if bytesRead > 0 {
                     let data = Data(buffer[..<Int(bytesRead)])
+
+                    if passwordPromptPending, let password = pendingPassword {
+                        if let output = String(data: data, encoding: .utf8),
+                           output.contains("assword:") {
+                            passwordPromptPending = false
+                            self.pendingPassword = nil
+                            let passwordData = (password + "\n").data(using: .utf8)!
+                            _ = passwordData.withUnsafeBytes { ptr in
+                                write(fd, ptr.baseAddress, passwordData.count)
+                            }
+                            continue
+                        }
+                    }
+
                     outputContinuation?.yield(data)
                 } else if bytesRead == 0 {
                     break
@@ -211,6 +308,8 @@ actor SystemTerminalSession: TerminalSessionProtocol {
     func disconnect() async {
         logInfo("Disconnecting native terminal", category: .network)
 
+        pendingPassword = nil
+        passwordPromptPending = false
         readTask?.cancel()
         readTask = nil
 

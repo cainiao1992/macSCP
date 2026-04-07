@@ -20,13 +20,34 @@ actor SystemSFTPSession: SFTPSessionProtocol {
     private(set) var isConnected = false
     private(set) var currentPath = "/"
     private var homePath = "/"
+    private var password: String?
+    private var askpassScriptPath: String?
 
     init() {}
 
     // MARK: - Connection
 
     func connect(host: String, port: Int, username: String, password: String) async throws {
-        throw AppError.connectionFailed("System SFTP session requires private key authentication")
+        logInfo("System SFTP connecting to \(username)@\(host):\(port) via password", category: .sftp)
+
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+
+        let tempDir = NSTemporaryDirectory()
+        let scriptPath = (tempDir as NSString).appendingPathComponent("macSCP-askpass-\(UUID().uuidString).sh")
+        let escapedPassword = password.replacingOccurrences(of: "'", with: "'\\''")
+        let scriptContent = "#!/bin/sh\necho '\(escapedPassword)'\n"
+        try scriptContent.write(toFile: scriptPath, atomically: true, encoding: .utf8)
+        let attrs: [FileAttributeKey: Any] = [.posixPermissions: 0o700]
+        try FileManager.default.setAttributes(attrs, ofItemAtPath: scriptPath)
+        self.askpassScriptPath = scriptPath
+
+        self.isConnected = true
+        currentPath = try await executeSSHCommand("pwd")
+        homePath = currentPath
+        logInfo("System SFTP connected to \(host) via password auth", category: .sftp)
     }
 
     func connect(host: String, port: Int, username: String, privateKeyPath: String, passphrase: String?) async throws {
@@ -44,6 +65,13 @@ actor SystemSFTPSession: SFTPSessionProtocol {
 
     func disconnect() async {
         logInfo("System SFTP disconnecting", category: .sftp)
+
+        if let path = askpassScriptPath {
+            try? FileManager.default.removeItem(atPath: path)
+            askpassScriptPath = nil
+        }
+        password = nil
+
         isConnected = false
         currentPath = "/"
         homePath = "/"
@@ -144,14 +172,25 @@ actor SystemSFTPSession: SFTPSessionProtocol {
         let localPath = localURL.path
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/scp")
-        process.arguments = [
+
+        var arguments = [
             "-o", "StrictHostKeyChecking=accept-new",
             "-o", "ServerAliveInterval=30",
-            "-i", privateKeyPath,
-            "-P", String(port),
-            localPath,
-            "\(username)@\(host):\(resolvedPath)"
+            "-P", String(port)
         ]
+
+        if let askpassPath = askpassScriptPath {
+            var environment = ProcessInfo.processInfo.environment
+            environment["SSH_ASKPASS"] = askpassPath
+            environment["SSH_ASKPASS_REQUIRE"] = "force"
+            environment["DISPLAY"] = ":0"
+            process.environment = environment
+        } else {
+            arguments.append(contentsOf: ["-i", privateKeyPath])
+        }
+
+        arguments.append(contentsOf: [localPath, "\(username)@\(host):\(resolvedPath)"])
+        process.arguments = arguments
 
         try process.run()
         process.waitUntilExit()
@@ -197,9 +236,18 @@ actor SystemSFTPSession: SFTPSessionProtocol {
             "-o", "ServerAliveInterval=30",
             "-o", "ServerAliveCountMax=3",
             "-o", "BatchMode=no",
-            "-i", privateKeyPath,
             "-p", String(port)
         ]
+
+        if let askpassPath = askpassScriptPath {
+            var environment = ProcessInfo.processInfo.environment
+            environment["SSH_ASKPASS"] = askpassPath
+            environment["SSH_ASKPASS_REQUIRE"] = "force"
+            environment["DISPLAY"] = ":0"
+            process.environment = environment
+        } else {
+            arguments.append(contentsOf: ["-i", privateKeyPath])
+        }
 
         if let outputFile = outputFile {
             let stdoutPipe = Pipe()

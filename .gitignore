@@ -133,3 +133,6 @@ build/
 
 AGENTS.md
 CLAUDE.md
+
+.planning/
+ .gitignore
