@@ -15,7 +15,7 @@ actor SystemTerminalSession: TerminalSessionProtocol {
     private var childPID: pid_t = 0
     private var outputContinuation: AsyncStream<Data>.Continuation?
     private var _outputStream: AsyncStream<Data>?
-    private var currentSize: TerminalSize = .default
+    private var currentSize: TerminalSize = TerminalSize(columns: 80, rows: 24)
     private var readTask: Task<Void, Never>?
     private(set) var isConnected = false
     private(set) var sessionEndedGracefully = false
@@ -81,7 +81,7 @@ actor SystemTerminalSession: TerminalSessionProtocol {
             ws_xpixel: 0,
             ws_ypixel: 0
         )
-        ioctl(fd, TIOCSWINSZ, &winsize)
+        _ = ioctl(fd, TIOCSWINSZ, &winsize)
 
         // Build ssh command
         let sshArgs: [String] = [
@@ -137,7 +137,7 @@ actor SystemTerminalSession: TerminalSessionProtocol {
         isConnected = true
 
         // Set non-blocking on master
-        fcntl(masterFD, F_SETFL, fcntl(masterFD, F_GETFL) | O_NONBLOCK)
+        _ = fcntl(masterFD, F_SETFL, fcntl(masterFD, F_GETFL) | O_NONBLOCK)
 
         // Start reading from PTY
         startReading()
@@ -203,7 +203,7 @@ actor SystemTerminalSession: TerminalSessionProtocol {
             ws_xpixel: 0,
             ws_ypixel: 0
         )
-        ioctl(masterFD, TIOCSWINSZ, &winsize)
+        _ = ioctl(masterFD, TIOCSWINSZ, &winsize)
     }
 
     // MARK: - Disconnect

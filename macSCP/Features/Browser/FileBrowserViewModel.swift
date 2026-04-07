@@ -462,8 +462,8 @@ final class FileBrowserViewModel {
             do {
                 try Task.checkCancellation()
 
-                try await self.fileRepository.download(remotePath: file.path, to: url) { [weak self] bytesTransferred in
-                    Task { @MainActor in
+                try await self.fileRepository.download(remotePath: file.path, to: url) { bytesTransferred in
+                    Task { @MainActor [weak self] in
                         guard self?.activeTransfers[transferId] != nil else { return }
                         self?.activeTransfers[transferId]?.bytesTransferred = bytesTransferred
                     }
@@ -570,8 +570,8 @@ final class FileBrowserViewModel {
                     // Check for cancellation before starting
                     try Task.checkCancellation()
 
-                    try await self.fileRepository.upload(localURL: url, to: remotePath) { [weak self] bytesTransferred in
-                        Task { @MainActor in
+                    try await self.fileRepository.upload(localURL: url, to: remotePath) { bytesTransferred in
+                        Task { @MainActor [weak self] in
                             // Check if transfer was cancelled
                             guard self?.activeTransfers[transferId] != nil else { return }
                             self?.activeTransfers[transferId]?.bytesTransferred = bytesTransferred
@@ -690,8 +690,8 @@ final class FileBrowserViewModel {
         isShowingTransfersPopover = true
 
         do {
-            try await fileRepository.download(remotePath: file.path, to: destinationURL) { [weak self] bytesTransferred in
-                Task { @MainActor in
+            try await fileRepository.download(remotePath: file.path, to: destinationURL) { bytesTransferred in
+                Task { @MainActor [weak self] in
                     guard self?.activeTransfers[transferId] != nil else { return }
                     self?.activeTransfers[transferId]?.bytesTransferred = bytesTransferred
                 }

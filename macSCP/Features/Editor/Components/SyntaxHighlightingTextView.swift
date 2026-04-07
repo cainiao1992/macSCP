@@ -7,7 +7,7 @@
 //
 
 import AppKit
-import Highlightr
+@preconcurrency import Highlightr
 import SwiftUI
 
 extension Notification.Name {
@@ -218,8 +218,8 @@ struct SyntaxHighlightingTextView: NSViewRepresentable {
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                guard let self, let textView = self.textView else { return }
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
+                    guard let self, let textView = self.textView else { return }
                     self.updateSearchHighlight(textView: textView)
                 }
             }
@@ -228,9 +228,12 @@ struct SyntaxHighlightingTextView: NSViewRepresentable {
         // MARK: - Appearance Observation
 
         func startObservingAppearance(textView: NSTextView, textStorage: CodeAttributedString) {
-            appearanceObservation = NSApplication.shared.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, change in
-                guard let self, let newAppearance = change.newValue else { return }
-                self.applyTheme(for: newAppearance, textStorage: textStorage)
+            appearanceObservation = NSApplication.shared.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let appearance = NSApplication.shared.effectiveAppearance
+                    self.applyTheme(for: appearance, textStorage: self.textStorage ?? textStorage)
+                }
             }
         }
 

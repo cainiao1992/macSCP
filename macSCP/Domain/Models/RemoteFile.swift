@@ -18,7 +18,7 @@ struct RemoteFile: Identifiable, Hashable, Sendable, Codable {
     let owner: String?
     let group: String?
 
-    init(
+    nonisolated init(
         id: UUID = UUID(),
         name: String,
         path: String,
@@ -52,7 +52,7 @@ struct RemoteFile: Identifiable, Hashable, Sendable, Codable {
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
 
-    var fileExtension: String {
+    nonisolated var fileExtension: String {
         name.fileExtension.lowercased()
     }
 
@@ -189,7 +189,7 @@ enum FileType: String, Sendable {
 
 // MARK: - Sorting
 extension RemoteFile {
-    static func sortedFiles(_ files: [RemoteFile], by criteria: SortCriteria, ascending: Bool = true) -> [RemoteFile] {
+    nonisolated static func sortedFiles(_ files: [RemoteFile], by criteria: SortCriteria, ascending: Bool = true) -> [RemoteFile] {
         files.sorted { file1, file2 in
             // Directories always come first
             if file1.isDirectory != file2.isDirectory {

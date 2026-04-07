@@ -99,8 +99,8 @@ final class AppLockManager {
 
     // MARK: - Initialization
 
-    private init(biometricService: BiometricAuthServiceProtocol = BiometricAuthService.shared) {
-        self.biometricService = biometricService
+    private init(biometricService: BiometricAuthServiceProtocol? = nil) {
+        self.biometricService = biometricService ?? BiometricAuthService.shared
 
         // Load persisted preferences (didSet not called during init)
         self.isBiometricLockEnabled = UserDefaults.standard.bool(forKey: Keys.biometricLockEnabled)
@@ -244,8 +244,8 @@ final class AppLockManager {
             forName: NSApplication.didResignActiveNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
+        ) { _ in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
                 if self.lockOnAppResume {
                     self.lock(reason: "app went to background")
@@ -258,8 +258,8 @@ final class AppLockManager {
             forName: NSApplication.didBecomeActiveNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
+        ) { _ in
+            Task { @MainActor [weak self] in
                 self?.recordActivity()
             }
         }

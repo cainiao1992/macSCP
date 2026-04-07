@@ -294,7 +294,7 @@ actor SystemSFTPSession: SFTPSessionProtocol {
             let dateStr = "\(components[5]) \(components[6]) \(components[7])"
             dateFormatter.dateFormat = "MMM dd HH:mm"
             modDate = dateFormatter.date(from: dateStr)
-            if var date = modDate, Calendar.current.component(.year, from: date) == 2000 {
+            if let date = modDate, Calendar.current.component(.year, from: date) == 2000 {
                 var comps = Calendar.current.dateComponents([.month, .day, .hour, .minute, .second], from: date)
                 comps.year = Calendar.current.component(.year, from: Date())
                 modDate = Calendar.current.date(from: comps)
