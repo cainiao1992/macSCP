@@ -23,6 +23,10 @@ final class ConnectionListViewModelTests: XCTestCase {
         mockKeychainService = MockKeychainService()
         mockWindowManager = WindowManager.shared
 
+        await mockConnectionRepository.reset()
+        await mockFolderRepository.reset()
+        await mockKeychainService.reset()
+
         sut = ConnectionListViewModel(
             connectionRepository: mockConnectionRepository,
             folderRepository: mockFolderRepository,

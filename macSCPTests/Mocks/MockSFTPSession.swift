@@ -195,4 +195,8 @@ actor MockSFTPSession: SFTPSessionProtocol {
         mockCommandOutput = ""
         mockError = nil
     }
+
+    func setMockError(_ error: Error?) {
+        mockError = error
+    }
 }

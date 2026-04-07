@@ -20,11 +20,13 @@ struct SidebarView: View {
             NavigationLink(value: SidebarSelection.allConnections) {
                 Label {
                     Text("All Connections")
+                        .accessibilityIdentifier("allConnectionsRow")
                 } icon: {
                     Image(systemName: "server.rack")
                         .foregroundStyle(Color.accentColor)
                 }
             }
+            .accessibilityIdentifier("allConnectionsRow")
             .dropDestination(for: Connection.self) { connections, _ in
                 for connection in connections {
                     Task { await viewModel.moveConnection(connection, to: nil) }
@@ -71,6 +73,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .accessibilityIdentifier("sidebar")
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button {

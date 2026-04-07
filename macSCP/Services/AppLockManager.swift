@@ -99,7 +99,7 @@ final class AppLockManager {
 
     // MARK: - Initialization
 
-    private init(biometricService: BiometricAuthServiceProtocol? = nil) {
+    init(biometricService: BiometricAuthServiceProtocol? = nil) {
         self.biometricService = biometricService ?? BiometricAuthService.shared
 
         // Load persisted preferences (didSet not called during init)

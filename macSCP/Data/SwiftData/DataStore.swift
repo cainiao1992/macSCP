@@ -39,6 +39,10 @@ final class DataStore {
         }
     }
 
+    init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+    }
+
     var modelContext: ModelContext {
         modelContainer.mainContext
     }

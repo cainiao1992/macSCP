@@ -102,6 +102,7 @@ struct FileBrowserView: View {
             .frame(minWidth: WindowSize.minFileBrowser.width, minHeight: WindowSize.minFileBrowser.height)
             .navigationTitle(viewModel.currentPath == "/" ? viewModel.connection.name : (viewModel.currentPath as NSString).lastPathComponent)
             .navigationSubtitle(viewModel.isConnected ? viewModel.connection.connectionString : "Disconnected")
+            .accessibilityIdentifier("fileBrowser")
             .toolbar {
                 ToolbarItemGroup(placement: .navigation) {
                     Button {
@@ -151,24 +152,28 @@ struct FileBrowserView: View {
             } label: {
                 Label("New Folder", systemImage: "folder.badge.plus")
             }
-            
+            .accessibilityIdentifier("newFolderButton")
+
             Button {
                 viewModel.isShowingNewFileSheet = true
             } label: {
                 Label("New File", systemImage: "doc.badge.plus")
             }
+            .accessibilityIdentifier("newFileButton")
         } label: {
             Label("New", systemImage: "plus")
         }
         .help("New File or Folder")
-        
+        .accessibilityIdentifier("newButton")
+
         Button {
             Task { await viewModel.uploadFiles() }
         } label: {
             Label("Upload", systemImage: "square.and.arrow.up")
         }
         .help("Upload Files")
-        
+        .accessibilityIdentifier("uploadButton")
+
         Button {
             viewModel.confirmDeleteSelected()
         } label: {
@@ -176,6 +181,7 @@ struct FileBrowserView: View {
         }
         .disabled(viewModel.selectedFiles.isEmpty)
         .help("Delete Selected")
+        .accessibilityIdentifier("deleteButton")
         
         Spacer()
         

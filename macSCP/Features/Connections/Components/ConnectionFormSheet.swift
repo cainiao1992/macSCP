@@ -107,13 +107,18 @@ struct ConnectionFormSheet: View {
                 // Connection details based on type
                 Section("Connection") {
                     TextField("Name", text: $name)
+                        .accessibilityIdentifier("nameField")
 
                     if selectedType == .sftp {
                         TextField("Host", text: $host)
+                            .accessibilityIdentifier("hostField")
                         TextField("Port", text: $port)
+                            .accessibilityIdentifier("portField")
                         TextField("Username", text: $username)
+                            .accessibilityIdentifier("usernameField")
                     } else if selectedType == .s3 {
                         TextField("Access Key ID", text: $username)
+                            .accessibilityIdentifier("usernameField")
                         SecureField("Secret Access Key", text: $s3SecretAccessKey)
                         TextField("Bucket", text: $s3Bucket)
                         TextField("Region", text: $s3Region)
@@ -211,6 +216,7 @@ struct ConnectionFormSheet: View {
                 }
                 .keyboardShortcut(.cancelAction)
                 .buttonStyle(.bordered)
+                .accessibilityIdentifier("cancelButton")
 
                 Button(mode.saveButtonTitle) {
                     save()
@@ -218,6 +224,7 @@ struct ConnectionFormSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
                 .disabled(!isValid)
+                .accessibilityIdentifier("saveButton")
             }
             .padding()
         }

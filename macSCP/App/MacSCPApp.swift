@@ -11,12 +11,15 @@ import Sparkle
 
 @main
 struct MacSCPApp: App {
-    @StateObject private var container = DependencyContainer.shared
+    @StateObject private var container: DependencyContainer
 
     private let updaterController: SPUStandardUpdaterController
     @StateObject private var checkForUpdatesViewModel: CheckForUpdatesViewModel
 
     init() {
+        let container = DependencyContainer.shared
+        self._container = StateObject(wrappedValue: container)
+
         AnalyticsService.initialize()
         AppLockManager.shared.lockIfNeeded()
 

@@ -77,7 +77,7 @@ final class FileBrowserViewModel {
     private let sftpSession: SFTPSessionProtocol?
     private let s3Session: S3SessionProtocol?
     private let fileRepository: FileRepositoryProtocol
-    private let clipboardService: ClipboardService
+    private let clipboardService: ClipboardServiceProtocol
     private let navigationService = NavigationService()
 
     // MARK: - Initialization (SFTP)
@@ -85,7 +85,7 @@ final class FileBrowserViewModel {
         connection: Connection,
         sftpSession: SFTPSessionProtocol,
         fileRepository: FileRepositoryProtocol,
-        clipboardService: ClipboardService,
+        clipboardService: ClipboardServiceProtocol,
         password: String
     ) {
         self.connection = connection
@@ -101,7 +101,7 @@ final class FileBrowserViewModel {
         connection: Connection,
         s3Session: S3SessionProtocol,
         fileRepository: FileRepositoryProtocol,
-        clipboardService: ClipboardService,
+        clipboardService: ClipboardServiceProtocol,
         secretAccessKey: String
     ) {
         self.connection = connection

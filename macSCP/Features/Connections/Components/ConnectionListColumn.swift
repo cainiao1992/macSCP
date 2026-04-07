@@ -42,6 +42,7 @@ struct ConnectionListColumn: View {
                     Label("New Connection", systemImage: "square.and.pencil")
                 }
                 .help("New Connection")
+                .accessibilityIdentifier("newConnectionButton")
             }
         }
     }
@@ -86,6 +87,7 @@ struct ConnectionListColumn: View {
     private var connectionList: some View {
         List(viewModel.filteredConnections, selection: $viewModel.selectedConnectionId) { connection in
             ConnectionRowView(connection: connection)
+                .accessibilityIdentifier("connectionRow_\(connection.name)")
                 .draggable(connection)
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {

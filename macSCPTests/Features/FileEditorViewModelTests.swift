@@ -12,12 +12,14 @@ import XCTest
 final class FileEditorViewModelTests: XCTestCase {
     var sut: FileEditorViewModel!
     var mockFileRepository: MockFileRepository!
+    var highlightViewModel: FileEditorViewModel!
 
     let testContent = "Hello, World!\nThis is a test file.\nLine 3."
 
     override func setUp() async throws {
         try await super.setUp()
         mockFileRepository = MockFileRepository()
+        await mockFileRepository.reset()
 
         sut = FileEditorViewModel(
             filePath: "/test/file.txt",
@@ -440,8 +442,6 @@ final class FileEditorViewModelTests: XCTestCase {
 
     // MARK: - NSLayoutManager Highlight Tests
 
-    private var highlightViewModel: FileEditorViewModel!
-
     private func makeTextView(content: String) -> (NSTextView, NSLayoutManager) {
         let textStorage = NSTextStorage(string: content)
         let layoutManager = NSLayoutManager()
@@ -690,5 +690,96 @@ final class FileEditorViewModelTests: XCTestCase {
         XCTAssertTrue(vm.searchResults.isEmpty)
         textView.highlightRange = nil
         XCTAssertNil(textView.highlightRange, "Non-matching search must clear highlight")
+    }
+
+    // MARK: - Whole Word Search Tests
+
+    func testSearch_WholeWordDisabled_MatchesSubstring() {
+        sut.content = "testing progress"
+        sut.isWholeWord = false
+        sut.searchText = "test"
+
+        sut.search()
+
+        XCTAssertTrue(sut.searchResults.count > 0)
+    }
+
+    func testSearch_WholeWordEnabled_NoMatchForSubstring() {
+        sut.content = "testing progress"
+        sut.isWholeWord = true
+        sut.searchText = "test"
+
+        sut.search()
+
+        XCTAssertEqual(sut.searchResults.count, 0)
+    }
+
+    func testSearch_WholeWordEnabled_MatchesFullWord() {
+        sut.isWholeWord = true
+        sut.searchText = "test"
+
+        sut.search()
+
+        XCTAssertTrue(sut.searchResults.count > 0)
+    }
+
+    func testReplaceCurrent_WholeWord() {
+        sut.isWholeWord = true
+        sut.searchText = "test"
+        sut.replaceText = "replaced"
+
+        sut.search()
+        sut.replaceCurrent()
+
+        XCTAssertNotNil(sut.pendingSingleReplace)
+        XCTAssertEqual(sut.pendingSingleReplace?.text, "replaced")
+    }
+
+    func testReplaceAll_WholeWord() {
+        sut.content = "test test test"
+        sut.isWholeWord = true
+        sut.searchText = "test"
+        sut.replaceText = "replaced"
+
+        sut.search()
+        sut.replaceAll()
+
+        XCTAssertNotNil(sut.pendingReplaceAll)
+        XCTAssertEqual(sut.pendingReplaceAll?.count, 3)
+    }
+
+    // MARK: - Detected Language Tests
+
+    func testDetectedLanguage_SwiftFile() {
+        highlightViewModel = FileEditorViewModel(
+            filePath: "/test/file.swift",
+            fileName: "file.swift",
+            initialContent: testContent,
+            fileRepository: mockFileRepository
+        )
+
+        XCTAssertEqual(highlightViewModel?.detectedLanguage, "swift")
+    }
+
+    func testDetectedLanguage_PythonFile() {
+        highlightViewModel = FileEditorViewModel(
+            filePath: "/test/script.py",
+            fileName: "script.py",
+            initialContent: testContent,
+            fileRepository: mockFileRepository
+        )
+
+        XCTAssertEqual(highlightViewModel?.detectedLanguage, "python")
+    }
+
+    func testDetectedLanguage_UnknownExtension() {
+        highlightViewModel = FileEditorViewModel(
+            filePath: "/test/file.xyz",
+            fileName: "file.xyz",
+            initialContent: testContent,
+            fileRepository: mockFileRepository
+        )
+
+        XCTAssertNil(highlightViewModel?.detectedLanguage)
     }
 }
