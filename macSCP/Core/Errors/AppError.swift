@@ -14,6 +14,7 @@ enum AppError: LocalizedError, Sendable {
     case connectionLost
     case authenticationFailed
     case hostUnreachable
+    case hostKeyMismatch(host: String, port: Int)
 
     // SFTP errors
     case sftpOperationFailed(String)
@@ -72,6 +73,8 @@ enum AppError: LocalizedError, Sendable {
             return "Authentication failed. Please check your credentials."
         case .hostUnreachable:
             return "Host is unreachable. Check the hostname and network connection."
+        case .hostKeyMismatch(let host, let port):
+            return "The host key for \(host):\(port) has changed. This could indicate a security issue or that the server has been reconfigured."
 
         case .sftpOperationFailed(let message):
             return "SFTP operation failed: \(message)"
@@ -163,9 +166,19 @@ enum AppError: LocalizedError, Sendable {
             return "Use a Mac with Touch ID or pair an Apple Watch to enable biometric authentication."
         case .biometricAuthFailed:
             return "Please try again or use your system password."
+        case .hostKeyMismatch:
+            return "You can replace the stored key and reconnect, or disconnect. Only replace the key if you trust the new server."
         default:
             return nil
         }
+    }
+}
+
+// MARK: - Host Key Helpers
+extension AppError {
+    var isHostKeyMismatch: Bool {
+        if case .hostKeyMismatch = self { return true }
+        return false
     }
 }
 

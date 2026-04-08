@@ -36,6 +36,8 @@ final class TerminalViewModel {
     private(set) var state: TerminalState = .disconnected
     private(set) var isConnected: Bool = false
     var error: AppError?
+    var isShowingHostKeyMismatchAlert = false
+    private var detectedHostKeyMismatch = false
 
     let connectionName: String
 
@@ -94,6 +96,7 @@ final class TerminalViewModel {
         }
 
         state = .connecting
+        detectedHostKeyMismatch = false
 
         do {
             if connectionData.authMethod == .password {
@@ -176,6 +179,14 @@ final class TerminalViewModel {
             for await data in stream {
                 guard !Task.isCancelled else { break }
 
+                // Check for host key mismatch in terminal output
+                if !detectedHostKeyMismatch {
+                    if let text = String(data: data, encoding: .utf8),
+                       (text.contains("REMOTE HOST IDENTIFICATION HAS CHANGED") || text.contains("Host key verification failed")) {
+                        detectedHostKeyMismatch = true
+                    }
+                }
+
                 await MainActor.run {
                     // Buffer data if callback not yet set, otherwise deliver immediately
                     if let callback = self.onOutput {
@@ -191,7 +202,10 @@ final class TerminalViewModel {
             await MainActor.run {
                 if self.isConnected {
                     self.isConnected = false
-                    if graceful {
+                    if self.detectedHostKeyMismatch {
+                        self.state = .error(.hostKeyMismatch(host: self.connectionData.host, port: self.connectionData.port))
+                        self.isShowingHostKeyMismatchAlert = true
+                    } else if graceful {
                         self.state = .disconnected
                     } else {
                         self.state = .error(.terminalConnectionLost)
@@ -226,6 +240,28 @@ final class TerminalViewModel {
     func cleanup() async {
         onOutput = nil
         await disconnect()
+    }
+
+    // MARK: - Host Key Mismatch
+
+    func disconnectAfterHostKeyMismatch() {
+        isShowingHostKeyMismatchAlert = false
+        detectedHostKeyMismatch = false
+        state = .disconnected
+    }
+
+    func replaceHostKeyAndReconnect() async {
+        isShowingHostKeyMismatchAlert = false
+        detectedHostKeyMismatch = false
+
+        do {
+            try HostKeyService.removeHostKey(host: connectionData.host, port: connectionData.port)
+            logInfo("Host key replaced, reconnecting terminal", category: .network)
+        } catch {
+            logError("Failed to remove host key: \(error)", category: .network)
+        }
+
+        await reconnect()
     }
 
     // MARK: - Error Handling

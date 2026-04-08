@@ -254,6 +254,44 @@ final class AppErrorTests: XCTestCase {
         XCTAssertNil(AppError.unknown("test").recoverySuggestion)
     }
 
+    // MARK: - errorDescription: Host Key Mismatch
+
+    func testErrorDescription_HostKeyMismatch() {
+        let error = AppError.hostKeyMismatch(host: "example.com", port: 22)
+        let desc = error.errorDescription
+        XCTAssertTrue(desc?.contains("example.com") ?? false)
+        XCTAssertTrue(desc?.contains("22") ?? false)
+        XCTAssertTrue(desc?.contains("host key") ?? false)
+    }
+
+    func testErrorDescription_HostKeyMismatch_NonStandardPort() {
+        let error = AppError.hostKeyMismatch(host: "10.0.0.1", port: 2222)
+        let desc = error.errorDescription
+        XCTAssertTrue(desc?.contains("10.0.0.1") ?? false)
+        XCTAssertTrue(desc?.contains("2222") ?? false)
+    }
+
+    // MARK: - recoverySuggestion: Host Key Mismatch
+
+    func testRecoverySuggestion_HostKeyMismatch() {
+        let error = AppError.hostKeyMismatch(host: "example.com", port: 22)
+        let desc = error.recoverySuggestion
+        XCTAssertTrue(desc?.contains("replace") ?? false)
+        XCTAssertTrue(desc?.contains("disconnect") ?? false)
+    }
+
+    // MARK: - isHostKeyMismatch
+
+    func testIsHostKeyMismatch_True() {
+        let error = AppError.hostKeyMismatch(host: "example.com", port: 22)
+        XCTAssertTrue(error.isHostKeyMismatch)
+    }
+
+    func testIsHostKeyMismatch_False() {
+        let error = AppError.connectionFailed("test")
+        XCTAssertFalse(error.isHostKeyMismatch)
+    }
+
     // MARK: - AppError.from()
 
     func testFrom_AppError() {

@@ -262,6 +262,11 @@ actor SystemSFTPSession: SFTPSessionProtocol {
             process.waitUntilExit()
 
             guard process.terminationStatus == 0 else {
+                let errorData = (process.standardError as? Pipe)?.fileHandleForReading.readDataToEndOfFile()
+                let errorMsg = errorData.flatMap { String(data: $0, encoding: .utf8) } ?? "Unknown error"
+                if errorMsg.contains("REMOTE HOST IDENTIFICATION HAS CHANGED") || errorMsg.contains("Host key verification failed") {
+                    throw AppError.hostKeyMismatch(host: self.host, port: self.port)
+                }
                 throw AppError.sftpOperationFailed("ssh command failed with exit code \(process.terminationStatus)")
             }
 
@@ -283,6 +288,9 @@ actor SystemSFTPSession: SFTPSessionProtocol {
             guard process.terminationStatus == 0 else {
                 let errorData = (process.standardError as? Pipe)?.fileHandleForReading.readDataToEndOfFile()
                 let errorMsg = errorData.flatMap { String(data: $0, encoding: .utf8) } ?? "Unknown error"
+                if errorMsg.contains("REMOTE HOST IDENTIFICATION HAS CHANGED") || errorMsg.contains("Host key verification failed") {
+                    throw AppError.hostKeyMismatch(host: self.host, port: self.port)
+                }
                 throw AppError.sftpOperationFailed("ssh command failed: \(errorMsg)")
             }
 

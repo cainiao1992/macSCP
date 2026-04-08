@@ -272,4 +272,42 @@ final class FileBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(sut.sortedFiles.count, 1)
         XCTAssertFalse(sut.sortedFiles.first?.isHidden ?? true)
     }
+
+    // MARK: - Host Key Mismatch Tests
+
+    func testConnect_HostKeyMismatch_ShowsAlert() async {
+        await mockSFTPSession.setMockError(AppError.hostKeyMismatch(host: "test.example.com", port: 22))
+
+        await sut.connect()
+
+        XCTAssertTrue(sut.isShowingHostKeyMismatchAlert)
+        XCTAssertFalse(sut.isConnected)
+        if case .idle = sut.state {
+        } else {
+            XCTFail("Expected .idle state, got \(sut.state)")
+        }
+    }
+
+    func testDisconnectAfterHostKeyMismatch_ResetsState() async {
+        await mockSFTPSession.setMockError(AppError.hostKeyMismatch(host: "test.example.com", port: 22))
+        await sut.connect()
+        XCTAssertTrue(sut.isShowingHostKeyMismatchAlert)
+
+        sut.disconnectAfterHostKeyMismatch()
+
+        XCTAssertFalse(sut.isShowingHostKeyMismatchAlert)
+        if case .idle = sut.state {
+        } else {
+            XCTFail("Expected .idle state, got \(sut.state)")
+        }
+    }
+
+    func testConnect_NonHostKeyError_DoesNotShowAlert() async {
+        await mockSFTPSession.setMockError(AppError.connectionFailed("timeout"))
+
+        await sut.connect()
+
+        XCTAssertFalse(sut.isShowingHostKeyMismatchAlert)
+        XCTAssertTrue(sut.state.isError)
+    }
 }

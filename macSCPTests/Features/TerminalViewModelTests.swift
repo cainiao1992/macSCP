@@ -334,4 +334,56 @@ final class TerminalViewModelTests: XCTestCase {
         XCTAssertEqual(mockSession.lastPort, 22)
         XCTAssertEqual(mockSession.lastUsername, "user")
     }
+
+    // MARK: - Host Key Mismatch Tests
+
+    func testConnect_SessionThrowsHostKeyMismatch_SetsError() async {
+        mockSession.reset()
+        mockSession.mockError = AppError.hostKeyMismatch(host: "example.com", port: 22)
+
+        await sut.connect()
+
+        if case .error(let error) = sut.state {
+            XCTAssertTrue(error.isHostKeyMismatch)
+        } else {
+            XCTFail("Expected .error state with hostKeyMismatch, got \(sut.state)")
+        }
+        XCTAssertFalse(sut.isShowingHostKeyMismatchAlert)
+    }
+
+    func testDisconnectAfterHostKeyMismatch_ResetsState() async {
+        mockSession.reset()
+        mockSession.mockError = AppError.hostKeyMismatch(host: "example.com", port: 22)
+        await sut.connect()
+
+        if case .error = sut.state {
+        } else {
+            XCTFail("Expected .error before disconnect")
+        }
+        sut.isShowingHostKeyMismatchAlert = true
+
+        sut.disconnectAfterHostKeyMismatch()
+
+        XCTAssertFalse(sut.isShowingHostKeyMismatchAlert)
+        if case .disconnected = sut.state {
+        } else {
+            XCTFail("Expected .disconnected, got \(sut.state)")
+        }
+    }
+
+    func testDisconnectAfterHostKeyMismatch_CanReconnect() async {
+        mockSession.reset()
+        mockSession.mockError = AppError.hostKeyMismatch(host: "example.com", port: 22)
+        await sut.connect()
+
+        sut.disconnectAfterHostKeyMismatch()
+
+        mockSession.reset()
+        await sut.connect()
+
+        if case .connected = sut.state {
+        } else {
+            XCTFail("Expected .connected after reconnect, got \(sut.state)")
+        }
+    }
 }

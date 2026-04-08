@@ -79,6 +79,18 @@ struct TerminalContentView: View {
             }
         }
         .errorAlert($viewModel.error)
+        .alert("Host Key Changed", isPresented: $viewModel.isShowingHostKeyMismatchAlert) {
+            Button("Disconnect", role: .cancel) {
+                viewModel.disconnectAfterHostKeyMismatch()
+            }
+            Button("Replace Key & Connect", role: .destructive) {
+                Task {
+                    await viewModel.replaceHostKeyAndReconnect()
+                }
+            }
+        } message: {
+            Text("The server's host key has changed. This may indicate the server has been reconfigured, or it could be a security concern.\n\nWould you like to replace the stored key and connect, or disconnect?")
+        }
     }
 
     private var statusBar: some View {

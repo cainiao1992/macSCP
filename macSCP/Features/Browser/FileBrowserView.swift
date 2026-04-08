@@ -72,6 +72,18 @@ struct FileBrowserView: View {
                 Text("Are you sure you want to delete \(count) item\(count == 1 ? "" : "s")? This cannot be undone.")
             }
             .errorAlert($viewModel.error)
+            .alert("Host Key Changed", isPresented: $viewModel.isShowingHostKeyMismatchAlert) {
+                Button("Disconnect", role: .cancel) {
+                    viewModel.disconnectAfterHostKeyMismatch()
+                }
+                Button("Replace Key & Connect", role: .destructive) {
+                    Task {
+                        await viewModel.replaceHostKeyAndConnect()
+                    }
+                }
+            } message: {
+                Text("The server's host key for \(viewModel.connection.host):\(viewModel.connection.port) has changed. This may indicate the server has been reconfigured, or it could be a security concern.\n\nWould you like to replace the stored key and connect, or disconnect?")
+            }
             .onDisappear {
                 Task {
                     await viewModel.disconnect()

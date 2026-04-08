@@ -59,10 +59,15 @@ final class FileBrowserViewModel {
     var isShowingNewFileSheet = false
     var isShowingRenameSheet = false
     var isShowingDeleteConfirmation = false
+    var isShowingHostKeyMismatchAlert = false
 
     // File to operate on
     var fileToRename: RemoteFile?
     var filesToDelete: [RemoteFile] = []
+
+    // Host key mismatch state
+    private var hostKeyMismatchHost = ""
+    private var hostKeyMismatchPort = 22
 
     // Window opening state
     var pendingFileInfoWindowId: String?
@@ -220,7 +225,15 @@ final class FileBrowserViewModel {
             }
         } catch {
             logError("Connection failed: \(error)", category: connection.connectionType == .s3 ? .s3 : .sftp)
-            state = .error(AppError.from(error))
+            let appError = AppError.from(error)
+            if case .hostKeyMismatch(let host, let port) = appError {
+                hostKeyMismatchHost = host
+                hostKeyMismatchPort = port
+                isShowingHostKeyMismatchAlert = true
+                state = .idle
+            } else {
+                state = .error(appError)
+            }
         }
     }
 
@@ -731,6 +744,33 @@ final class FileBrowserViewModel {
     /// Removes a specific transfer from the recent list
     func removeTransfer(_ transfer: TransferProgress) {
         recentTransfers.removeAll { $0.id == transfer.id }
+    }
+
+    // MARK: - Host Key Mismatch
+
+    func disconnectAfterHostKeyMismatch() {
+        isShowingHostKeyMismatchAlert = false
+        hostKeyMismatchHost = ""
+        hostKeyMismatchPort = 22
+        state = .idle
+    }
+
+    func replaceHostKeyAndConnect() async {
+        isShowingHostKeyMismatchAlert = false
+        state = .loading
+
+        do {
+            try HostKeyService.removeHostKey(host: hostKeyMismatchHost, port: hostKeyMismatchPort)
+            logInfo("Host key replaced, retrying connection", category: .sftp)
+            // Clear state and retry connection
+            hostKeyMismatchHost = ""
+            hostKeyMismatchPort = 22
+        } catch {
+            logError("Failed to remove host key: \(error)", category: .sftp)
+        }
+
+        // Retry connection
+        await connect()
     }
 
     // MARK: - File Content
