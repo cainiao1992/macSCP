@@ -37,11 +37,7 @@ actor SystemSFTPSession: SFTPSessionProtocol {
 
         let tempDir = NSTemporaryDirectory()
         let scriptPath = (tempDir as NSString).appendingPathComponent("macSCP-askpass-\(UUID().uuidString).sh")
-        let escapedPassword = password.replacingOccurrences(of: "'", with: "'\\''")
-        let scriptContent = "#!/bin/sh\necho '\(escapedPassword)'\n"
-        try scriptContent.write(toFile: scriptPath, atomically: true, encoding: .utf8)
-        let attrs: [FileAttributeKey: Any] = [.posixPermissions: 0o700]
-        try FileManager.default.setAttributes(attrs, ofItemAtPath: scriptPath)
+        try writeAskpassScript(to: scriptPath)
         self.askpassScriptPath = scriptPath
 
         self.isConnected = true
@@ -179,11 +175,12 @@ actor SystemSFTPSession: SFTPSessionProtocol {
             "-P", String(port)
         ]
 
-        if let askpassPath = askpassScriptPath {
+        if let askpassPath = askpassScriptPath, let password = password {
             var environment = ProcessInfo.processInfo.environment
             environment["SSH_ASKPASS"] = askpassPath
             environment["SSH_ASKPASS_REQUIRE"] = "force"
             environment["DISPLAY"] = ":0"
+            environment["MACSCP_ASKPASS_PASS"] = password
             process.environment = environment
         } else {
             arguments.append(contentsOf: ["-i", privateKeyPath])
@@ -238,11 +235,12 @@ actor SystemSFTPSession: SFTPSessionProtocol {
             "-p", String(port)
         ]
 
-        if let askpassPath = askpassScriptPath {
+        if let askpassPath = askpassScriptPath, let password = password {
             var environment = ProcessInfo.processInfo.environment
             environment["SSH_ASKPASS"] = askpassPath
             environment["SSH_ASKPASS_REQUIRE"] = "force"
             environment["DISPLAY"] = ":0"
+            environment["MACSCP_ASKPASS_PASS"] = password
             process.environment = environment
         } else {
             arguments.append(contentsOf: ["-i", privateKeyPath])
@@ -299,6 +297,20 @@ actor SystemSFTPSession: SFTPSessionProtocol {
     }
 
     // MARK: - Helpers
+
+    static var askpassScriptContent: String {
+        "#!/bin/sh\nprintf '%s' \"$MACSCP_ASKPASS_PASS\"\n"
+    }
+
+    func writeAskpassScript(to path: String) throws {
+        try Self.askpassScriptContent.write(toFile: path, atomically: true, encoding: .utf8)
+        let attrs: [FileAttributeKey: Any] = [.posixPermissions: 0o700]
+        try FileManager.default.setAttributes(attrs, ofItemAtPath: path)
+    }
+
+    func setAskpassScriptPath(_ path: String) throws {
+        askpassScriptPath = path
+    }
 
     private func resolvePath(_ path: String) -> String {
         if path.hasPrefix("/") { return path }

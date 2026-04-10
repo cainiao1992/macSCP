@@ -51,29 +51,6 @@ actor SystemTerminalSession: TerminalSessionProtocol {
         passwordPromptPending = true
         _ = await outputStream
 
-        let fd = posix_openpt(O_RDWR)
-        guard fd >= 0 else {
-            throw AppError.terminalConnectionFailed("Failed to open PTY")
-        }
-        guard grantpt(fd) == 0, unlockpt(fd) == 0 else {
-            close(fd)
-            throw AppError.terminalConnectionFailed("Failed to configure PTY")
-        }
-
-        let slaveName = ptsname(fd)
-        guard let slaveName = slaveName else {
-            close(fd)
-            throw AppError.terminalConnectionFailed("Failed to get PTY name")
-        }
-
-        var winsize = winsize(
-            ws_row: UInt16(currentSize.rows),
-            ws_col: UInt16(currentSize.columns),
-            ws_xpixel: 0,
-            ws_ypixel: 0
-        )
-        _ = ioctl(fd, TIOCSWINSZ, &winsize)
-
         let sshArgs: [String] = [
             "/usr/bin/ssh",
             "-t",
@@ -85,44 +62,7 @@ actor SystemTerminalSession: TerminalSessionProtocol {
             "\(username)@\(host)"
         ]
 
-        let argv: [UnsafeMutablePointer<CChar>?] = sshArgs.map { strdup($0) } + [nil]
-        let envp = environ
-
-        var fileActions: posix_spawn_file_actions_t?
-        posix_spawn_file_actions_init(&fileActions)
-
-        posix_spawn_file_actions_addopen(&fileActions, STDIN_FILENO, slaveName, O_RDWR, 0)
-        posix_spawn_file_actions_addopen(&fileActions, STDOUT_FILENO, slaveName, O_RDWR, 0)
-        posix_spawn_file_actions_addopen(&fileActions, STDERR_FILENO, slaveName, O_RDWR, 0)
-
-        var attrs: posix_spawnattr_t?
-        posix_spawnattr_init(&attrs)
-        posix_spawnattr_setflags(&attrs, Int16(POSIX_SPAWN_SETPGROUP))
-
-        var pid: pid_t = 0
-        let spawnResult = argv.withUnsafeBufferPointer { argvPtr in
-            posix_spawn(&pid, "/usr/bin/ssh", &fileActions, &attrs,
-                       UnsafeMutablePointer(mutating: argvPtr.baseAddress), envp)
-        }
-
-        for arg in argv where arg != nil {
-            free(arg)
-        }
-        posix_spawnattr_destroy(&attrs)
-        posix_spawn_file_actions_destroy(&fileActions)
-
-        guard spawnResult == 0 else {
-            close(fd)
-            throw AppError.terminalConnectionFailed("posix_spawn failed with error code \(spawnResult)")
-        }
-
-        masterFD = fd
-        childPID = pid
-        isConnected = true
-
-        _ = fcntl(masterFD, F_SETFL, fcntl(masterFD, F_GETFL) | O_NONBLOCK)
-
-        startReading()
+        try spawnSSH(sshArgs: sshArgs)
 
         logInfo("System terminal connected to \(host) via password auth", category: .network)
     }
@@ -141,7 +81,26 @@ actor SystemTerminalSession: TerminalSessionProtocol {
         sessionEndedGracefully = false
         _ = await outputStream
 
-        // Open PTY master
+        let sshArgs: [String] = [
+            "/usr/bin/ssh",
+            "-t",
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-o", "ServerAliveInterval=30",
+            "-o", "ServerAliveCountMax=3",
+            "-o", "BatchMode=no",
+            "-i", privateKeyPath,
+            "-p", String(port),
+            "\(username)@\(host)"
+        ]
+
+        try spawnSSH(sshArgs: sshArgs)
+
+        logInfo("System terminal connected to \(host)", category: .network)
+    }
+
+    // MARK: - PTY Spawn Helper
+
+    private func spawnSSH(sshArgs: [String]) throws {
         let fd = posix_openpt(O_RDWR)
         guard fd >= 0 else {
             throw AppError.terminalConnectionFailed("Failed to open PTY")
@@ -157,7 +116,6 @@ actor SystemTerminalSession: TerminalSessionProtocol {
             throw AppError.terminalConnectionFailed("Failed to get PTY name")
         }
 
-        // Set initial size
         var winsize = winsize(
             ws_row: UInt16(currentSize.rows),
             ws_col: UInt16(currentSize.columns),
@@ -166,49 +124,33 @@ actor SystemTerminalSession: TerminalSessionProtocol {
         )
         _ = ioctl(fd, TIOCSWINSZ, &winsize)
 
-        // Build ssh command
-        let sshArgs: [String] = [
-            "/usr/bin/ssh",
-            "-t",
-            "-o", "StrictHostKeyChecking=accept-new",
-            "-o", "ServerAliveInterval=30",
-            "-o", "ServerAliveCountMax=3",
-            "-o", "BatchMode=no",
-            "-i", privateKeyPath,
-            "-p", String(port),
-            "\(username)@\(host)"
-        ]
+        let argv = buildCArray(sshArgs)
+        defer { freeCArray(argv) }
 
-        // Convert to C arrays for posix_spawn
-        let argv: [UnsafeMutablePointer<CChar>?] = sshArgs.map { strdup($0) } + [nil]
-        let envp = environ
+        let envp = buildEnvCArray()
+        defer { freeCArray(envp) }
 
-        // Set up file actions to use the PTY slave for stdio
         var fileActions: posix_spawn_file_actions_t?
         posix_spawn_file_actions_init(&fileActions)
+        defer { posix_spawn_file_actions_destroy(&fileActions) }
 
-        // Open the slave PTY and dup to stdin/stdout/stderr
         posix_spawn_file_actions_addopen(&fileActions, STDIN_FILENO, slaveName, O_RDWR, 0)
         posix_spawn_file_actions_addopen(&fileActions, STDOUT_FILENO, slaveName, O_RDWR, 0)
         posix_spawn_file_actions_addopen(&fileActions, STDERR_FILENO, slaveName, O_RDWR, 0)
 
-        // Set up attributes for session leader
         var attrs: posix_spawnattr_t?
         posix_spawnattr_init(&attrs)
         posix_spawnattr_setflags(&attrs, Int16(POSIX_SPAWN_SETPGROUP))
+        defer { posix_spawnattr_destroy(&attrs) }
 
         var pid: pid_t = 0
         let spawnResult = argv.withUnsafeBufferPointer { argvPtr in
-            posix_spawn(&pid, "/usr/bin/ssh", &fileActions, &attrs,
-                       UnsafeMutablePointer(mutating: argvPtr.baseAddress), envp)
+            envp.withUnsafeBufferPointer { envpPtr in
+                posix_spawn(&pid, "/usr/bin/ssh", &fileActions, &attrs,
+                           UnsafeMutablePointer(mutating: argvPtr.baseAddress),
+                           UnsafeMutablePointer(mutating: envpPtr.baseAddress))
+            }
         }
-
-        // Clean up C strings
-        for arg in argv where arg != nil {
-            free(arg)
-        }
-        posix_spawnattr_destroy(&attrs)
-        posix_spawn_file_actions_destroy(&fileActions)
 
         guard spawnResult == 0 else {
             close(fd)
@@ -219,13 +161,31 @@ actor SystemTerminalSession: TerminalSessionProtocol {
         childPID = pid
         isConnected = true
 
-        // Set non-blocking on master
         _ = fcntl(masterFD, F_SETFL, fcntl(masterFD, F_GETFL) | O_NONBLOCK)
-
-        // Start reading from PTY
         startReading()
+    }
 
-        logInfo("System terminal connected to \(host)", category: .network)
+    func buildCArray(_ strings: [String]) -> [UnsafeMutablePointer<CChar>?] {
+        strings.map { strdup($0) } + [nil]
+    }
+
+    func freeCArray(_ array: [UnsafeMutablePointer<CChar>?]) {
+        for ptr in array where ptr != nil {
+            free(ptr)
+        }
+    }
+
+    func buildEnvCArray() -> [UnsafeMutablePointer<CChar>?] {
+        ProcessInfo.processInfo.environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
+    }
+
+    func isPasswordPrompt(_ output: String) -> Bool {
+        let lowered = output.lowercased()
+        return lowered.contains("password:")
+            || lowered.contains("password:")
+            || lowered.contains("passphrase")
+            || lowered.contains("pass phrase")
+            || lowered.contains("passcode:")
     }
 
     // MARK: - Read Loop
@@ -245,7 +205,7 @@ actor SystemTerminalSession: TerminalSessionProtocol {
 
                     if passwordPromptPending, let password = pendingPassword {
                         if let output = String(data: data, encoding: .utf8),
-                           output.contains("assword:") {
+                           isPasswordPrompt(output) {
                             passwordPromptPending = false
                             self.pendingPassword = nil
                             let passwordData = (password + "\n").data(using: .utf8)!
