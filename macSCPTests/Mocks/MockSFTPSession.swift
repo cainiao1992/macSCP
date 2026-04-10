@@ -34,6 +34,10 @@ actor MockSFTPSession: SFTPSessionProtocol {
     var getRealPathCalled = false
     var executeCommandCalled = false
 
+    // MARK: - Recorded Parameters
+    var lastWriteContent: String?
+    var lastWritePath: String?
+
     // MARK: - Mock Responses
     var mockFiles: [RemoteFile] = []
     var mockFileInfo: RemoteFile?
@@ -148,6 +152,8 @@ actor MockSFTPSession: SFTPSessionProtocol {
 
     func writeFileContent(_ content: String, to path: String) async throws {
         writeFileContentCalled = true
+        lastWriteContent = content
+        lastWritePath = path
         if let error = mockError { throw error }
     }
 
@@ -188,6 +194,9 @@ actor MockSFTPSession: SFTPSessionProtocol {
         getRealPathCalled = false
         executeCommandCalled = false
 
+        lastWriteContent = nil
+        lastWritePath = nil
+
         mockFiles = []
         mockFileInfo = nil
         mockFileContent = ""
@@ -198,5 +207,9 @@ actor MockSFTPSession: SFTPSessionProtocol {
 
     func setMockError(_ error: Error?) {
         mockError = error
+    }
+
+    func setMockFileContent(_ content: String) {
+        mockFileContent = content
     }
 }

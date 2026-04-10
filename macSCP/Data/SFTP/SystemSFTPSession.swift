@@ -208,8 +208,7 @@ actor SystemSFTPSession: SFTPSessionProtocol {
 
     func writeFileContent(_ content: String, to path: String) async throws {
         let resolvedPath = resolvePath(path)
-        let escapedContent = content.replacingOccurrences(of: "'", with: "'\\''")
-        _ = try await executeSSHCommand("cat > '\(escaped(resolvedPath))' << 'HEREDOC_EOF'\n\(escapedContent)\nHEREDOC_EOF")
+        _ = try await executeSSHCommand("cat > '\(escaped(resolvedPath))' << 'HEREDOC_EOF'\n\(content)\nHEREDOC_EOF")
     }
 
     func getRealPath(at path: String) async throws -> String {
