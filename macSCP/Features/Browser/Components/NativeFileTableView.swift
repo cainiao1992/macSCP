@@ -14,17 +14,20 @@ struct NativeFileTableView: NSViewRepresentable {
     let onDoubleClick: (RemoteFile) -> Void
     let onGetInfo: (RemoteFile) -> Void
     let onOpenEditor: ((RemoteFile) -> Void)?
+    var onQuickLook: ((RemoteFile) -> Void)?
 
     init(
         viewModel: FileBrowserViewModel,
         onDoubleClick: @escaping (RemoteFile) -> Void,
         onGetInfo: @escaping (RemoteFile) -> Void,
-        onOpenEditor: ((RemoteFile) -> Void)? = nil
+        onOpenEditor: ((RemoteFile) -> Void)? = nil,
+        onQuickLook: ((RemoteFile) -> Void)? = nil
     ) {
         self.viewModel = viewModel
         self.onDoubleClick = onDoubleClick
         self.onGetInfo = onGetInfo
         self.onOpenEditor = onOpenEditor
+        self.onQuickLook = onQuickLook
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -85,6 +88,9 @@ struct NativeFileTableView: NSViewRepresentable {
         // Set up context menu
         tableView.contextMenuDelegate = context.coordinator
 
+        // Set up keyboard handling
+        tableView.keyboardDelegate = context.coordinator
+
         // Configure scroll view
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
@@ -101,6 +107,7 @@ struct NativeFileTableView: NSViewRepresentable {
         context.coordinator.viewModel = viewModel
         context.coordinator.onDoubleClick = onDoubleClick
         context.coordinator.onGetInfo = onGetInfo
+        context.coordinator.onQuickLook = onQuickLook
 
         // Update selection state
         if let tableView = context.coordinator.tableView {
@@ -115,6 +122,14 @@ struct NativeFileTableView: NSViewRepresentable {
                 }
             }
             tableView.selectRowIndexes(selectedIndexes as IndexSet, byExtendingSelection: false)
+
+            // Sync sort descriptors from viewModel to tableView
+            let sortDescriptor = NSSortDescriptor(
+                key: viewModel.sortCriteria.columnKey,
+                ascending: viewModel.sortAscending
+            )
+            tableView.sortDescriptors = [sortDescriptor]
+
             context.coordinator.isUpdating = false
         }
     }
@@ -124,16 +139,18 @@ struct NativeFileTableView: NSViewRepresentable {
             viewModel: viewModel,
             onDoubleClick: onDoubleClick,
             onGetInfo: onGetInfo,
-            onOpenEditor: onOpenEditor
+            onOpenEditor: onOpenEditor,
+            onQuickLook: onQuickLook
         )
     }
 
     @MainActor
-    class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSFilePromiseProviderDelegate, ContextMenuTableViewDelegate {
+    class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSFilePromiseProviderDelegate, ContextMenuTableViewDelegate, KeyboardHandlingDelegate {
         var viewModel: FileBrowserViewModel
         var onDoubleClick: (RemoteFile) -> Void
         var onGetInfo: (RemoteFile) -> Void
         var onOpenEditor: ((RemoteFile) -> Void)?
+        var onQuickLook: ((RemoteFile) -> Void)?
         weak var tableView: NSTableView?
         var isUpdating = false
 
@@ -145,12 +162,14 @@ struct NativeFileTableView: NSViewRepresentable {
             viewModel: FileBrowserViewModel,
             onDoubleClick: @escaping (RemoteFile) -> Void,
             onGetInfo: @escaping (RemoteFile) -> Void,
-            onOpenEditor: ((RemoteFile) -> Void)?
+            onOpenEditor: ((RemoteFile) -> Void)?,
+            onQuickLook: ((RemoteFile) -> Void)? = nil
         ) {
             self.viewModel = viewModel
             self.onDoubleClick = onDoubleClick
             self.onGetInfo = onGetInfo
             self.onOpenEditor = onOpenEditor
+            self.onQuickLook = onQuickLook
             self.filePromiseQueue.qualityOfService = .userInitiated
         }
 
@@ -277,7 +296,6 @@ struct NativeFileTableView: NSViewRepresentable {
         func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
             guard row < viewModel.sortedFiles.count else { return nil }
             let file = viewModel.sortedFiles[row]
-            guard file.isFile else { return nil } // Skip directories for now
 
             let provider = NSFilePromiseProvider(fileType: UTType.data.identifier, delegate: self)
             provider.userInfo = ["file": file, "row": row]
@@ -289,7 +307,7 @@ struct NativeFileTableView: NSViewRepresentable {
             draggedFiles = rowIndexes.compactMap { index in
                 guard index < viewModel.sortedFiles.count else { return nil }
                 return viewModel.sortedFiles[index]
-            }.filter { $0.isFile }
+            }
         }
 
         func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
@@ -378,20 +396,20 @@ extension NativeFileTableView.Coordinator {
             menu.addItem(NSMenuItem.separator())
         }
 
-        let copyItem = NSMenuItem(title: "Copy", action: #selector(handleCopy(_:)), keyEquivalent: "")
+        let copyItem = NSMenuItem(title: "Copy", action: #selector(handleCopy(_:)), keyEquivalent: "c")
         copyItem.target = self
         copyItem.representedObject = file
         copyItem.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
         menu.addItem(copyItem)
 
-        let cutItem = NSMenuItem(title: "Cut", action: #selector(handleCut(_:)), keyEquivalent: "")
+        let cutItem = NSMenuItem(title: "Cut", action: #selector(handleCut(_:)), keyEquivalent: "x")
         cutItem.target = self
         cutItem.representedObject = file
         cutItem.image = NSImage(systemSymbolName: "scissors", accessibilityDescription: nil)
         menu.addItem(cutItem)
 
         if viewModel.canPaste {
-            let pasteItem = NSMenuItem(title: "Paste", action: #selector(handlePaste(_:)), keyEquivalent: "")
+            let pasteItem = NSMenuItem(title: "Paste", action: #selector(handlePaste(_:)), keyEquivalent: "v")
             pasteItem.target = self
             pasteItem.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: nil)
             menu.addItem(pasteItem)
@@ -399,13 +417,13 @@ extension NativeFileTableView.Coordinator {
 
         menu.addItem(NSMenuItem.separator())
 
-        let renameItem = NSMenuItem(title: "Rename", action: #selector(handleRename(_:)), keyEquivalent: "")
+        let renameItem = NSMenuItem(title: "Rename", action: #selector(handleRename(_:)), keyEquivalent: "\r")
         renameItem.target = self
         renameItem.representedObject = file
         renameItem.image = NSImage(systemSymbolName: "pencil", accessibilityDescription: nil)
         menu.addItem(renameItem)
 
-        let infoItem = NSMenuItem(title: "Get Info", action: #selector(handleGetInfo(_:)), keyEquivalent: "")
+        let infoItem = NSMenuItem(title: "Get Info", action: #selector(handleGetInfo(_:)), keyEquivalent: "i")
         infoItem.target = self
         infoItem.representedObject = file
         infoItem.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
@@ -422,7 +440,7 @@ extension NativeFileTableView.Coordinator {
             menu.addItem(NSMenuItem.separator())
         }
 
-        let deleteItem = NSMenuItem(title: "Delete", action: #selector(handleDelete(_:)), keyEquivalent: "")
+        let deleteItem = NSMenuItem(title: "Delete", action: #selector(handleDelete(_:)), keyEquivalent: "\u{8}")
         deleteItem.target = self
         deleteItem.representedObject = file
         deleteItem.image = NSImage(systemSymbolName: "trash", accessibilityDescription: nil)
@@ -437,14 +455,20 @@ extension NativeFileTableView.Coordinator {
     }
 
     @objc func handleCopy(_ sender: NSMenuItem) {
-        guard let file = sender.representedObject as? RemoteFile else { return }
-        viewModel.selectedFiles = [file.id]
+        // Use current selection (may include multi-select) instead of overwriting with single file
+        if viewModel.selectedFiles.isEmpty,
+           let file = sender.representedObject as? RemoteFile {
+            viewModel.selectedFiles = [file.id]
+        }
         viewModel.copySelectedFiles()
     }
 
     @objc func handleCut(_ sender: NSMenuItem) {
-        guard let file = sender.representedObject as? RemoteFile else { return }
-        viewModel.selectedFiles = [file.id]
+        // Use current selection (may include multi-select) instead of overwriting with single file
+        if viewModel.selectedFiles.isEmpty,
+           let file = sender.representedObject as? RemoteFile {
+            viewModel.selectedFiles = [file.id]
+        }
         viewModel.cutSelectedFiles()
     }
 
@@ -465,16 +489,96 @@ extension NativeFileTableView.Coordinator {
     }
 
     @objc func handleDownload(_ sender: NSMenuItem) {
-        guard let file = sender.representedObject as? RemoteFile else { return }
-        Task { @MainActor in
-            await viewModel.downloadFile(file)
+        // Download all selected files, or single right-clicked file
+        let filesToDownload = viewModel.selectedFilesList.filter { $0.isFile }
+        if filesToDownload.count > 1 {
+            Task { @MainActor in
+                await viewModel.downloadSelectedFiles()
+            }
+        } else if let file = sender.representedObject as? RemoteFile, file.isFile {
+            Task { @MainActor in
+                await viewModel.downloadFile(file)
+            }
         }
     }
 
     @objc func handleDelete(_ sender: NSMenuItem) {
-        guard let file = sender.representedObject as? RemoteFile else { return }
-        viewModel.confirmDelete([file])
+        // Delete all selected files, or single right-clicked file if no multi-selection
+        if viewModel.selectedFiles.isEmpty,
+           let file = sender.representedObject as? RemoteFile {
+            viewModel.confirmDelete([file])
+        } else {
+            viewModel.confirmDeleteSelected()
+        }
     }
+}
+
+// MARK: - Keyboard Handling
+extension NativeFileTableView.Coordinator {
+    func handleCopy() {
+        guard !viewModel.selectedFiles.isEmpty else { return }
+        viewModel.copySelectedFiles()
+    }
+
+    func handleCut() {
+        guard !viewModel.selectedFiles.isEmpty else { return }
+        viewModel.cutSelectedFiles()
+    }
+
+    func handlePaste() {
+        Task { @MainActor in
+            await viewModel.paste()
+        }
+    }
+
+    func handleDelete() {
+        guard !viewModel.selectedFiles.isEmpty else { return }
+        viewModel.confirmDeleteSelected()
+    }
+
+    func handleSelectAll() {
+        viewModel.selectAll()
+    }
+
+    func handleRename() {
+        guard let firstSelected = viewModel.selectedFilesList.first else { return }
+        viewModel.startRename(firstSelected)
+    }
+
+    func handleGoUp() {
+        Task { @MainActor in
+            await viewModel.goUp()
+        }
+    }
+
+    func handleOpen() {
+        guard let firstSelected = viewModel.selectedFilesList.first else { return }
+        if firstSelected.isDirectory {
+            Task { @MainActor in
+                await viewModel.navigateTo(firstSelected.path)
+            }
+        } else {
+            onDoubleClick(firstSelected)
+        }
+    }
+
+    func handleQuickLook() {
+        guard let firstSelected = viewModel.selectedFilesList.first else { return }
+        onQuickLook?(firstSelected)
+    }
+}
+
+// MARK: - Keyboard Handling Delegate
+protocol KeyboardHandlingDelegate: AnyObject {
+    func handleCopy()
+    func handleCut()
+    func handlePaste()
+    func handleDelete()
+    func handleSelectAll()
+    func handleRename()
+    func handleGoUp()
+    func handleOpen()
+    func handleQuickLook()
 }
 
 // MARK: - Context Menu Table View
@@ -484,6 +588,7 @@ protocol ContextMenuTableViewDelegate: AnyObject {
 
 class ContextMenuTableView: NSTableView {
     weak var contextMenuDelegate: ContextMenuTableViewDelegate?
+    weak var keyboardDelegate: KeyboardHandlingDelegate?
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)
@@ -498,5 +603,78 @@ class ContextMenuTableView: NSTableView {
         }
 
         return super.menu(for: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        guard let characters = event.charactersIgnoringModifiers else {
+            super.keyDown(with: event)
+            return
+        }
+
+        // Cmd+C → Copy
+        if modifiers.contains(.command) && characters == "c" {
+            keyboardDelegate?.handleCopy()
+            return
+        }
+
+        // Cmd+X → Cut
+        if modifiers.contains(.command) && characters == "x" {
+            keyboardDelegate?.handleCut()
+            return
+        }
+
+        // Cmd+V → Paste
+        if modifiers.contains(.command) && characters == "v" {
+            keyboardDelegate?.handlePaste()
+            return
+        }
+
+        // Cmd+A → Select All
+        if modifiers.contains(.command) && characters == "a" {
+            keyboardDelegate?.handleSelectAll()
+            return
+        }
+
+        // Cmd+I → Get Info
+        if modifiers.contains(.command) && characters == "i" {
+            if selectedRow >= 0 {
+                keyboardDelegate?.handleRename()
+            }
+            return
+        }
+
+        // Cmd+Up → Go Up
+        if modifiers.contains(.command) && event.keyCode == 126 {
+            keyboardDelegate?.handleGoUp()
+            return
+        }
+
+        // Cmd+Down → Open
+        if modifiers.contains(.command) && event.keyCode == 125 {
+            keyboardDelegate?.handleOpen()
+            return
+        }
+
+        // Delete / Backspace → Delete selected files
+        if event.keyCode == 51 || event.keyCode == 117 {
+            keyboardDelegate?.handleDelete()
+            return
+        }
+
+        // Return / Enter → Rename
+        if event.keyCode == 36 || event.keyCode == 76 {
+            keyboardDelegate?.handleRename()
+            return
+        }
+
+        // Space → Quick Look (Phase 3 placeholder)
+        if characters == " " && modifiers.isEmpty {
+            keyboardDelegate?.handleQuickLook()
+            return
+        }
+
+        super.keyDown(with: event)
     }
 }

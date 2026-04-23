@@ -11,13 +11,15 @@ struct FileListView: View {
     @Bindable var viewModel: FileBrowserViewModel
     let onOpenEditor: (RemoteFile) -> Void
     let onGetInfo: (RemoteFile) -> Void
+    var onQuickLook: ((RemoteFile) -> Void)?
 
     var body: some View {
         NativeFileTableView(
             viewModel: viewModel,
             onDoubleClick: handleDoubleClick,
             onGetInfo: onGetInfo,
-            onOpenEditor: onOpenEditor
+            onOpenEditor: onOpenEditor,
+            onQuickLook: onQuickLook
         )
     }
 
@@ -27,6 +29,8 @@ struct FileListView: View {
                 await viewModel.navigateTo(file.path)
             } else if FileTypeService.isPreviewable(file) {
                 onOpenEditor(file)
+            } else if FileTypeService.isQuickLookPreviewable(file), let onQuickLook = onQuickLook {
+                onQuickLook(file)
             }
         }
     }

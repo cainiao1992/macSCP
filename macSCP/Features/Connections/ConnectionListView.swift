@@ -127,6 +127,7 @@ struct ConnectionListView: View {
             if let connection = viewModel.connectionToConnect {
                 PasswordPromptSheet(
                     connectionName: connection.name,
+                    authMethod: connection.authMethod,
                     onConnect: { password in
                         viewModel.connectWithPassword(password)
                     },

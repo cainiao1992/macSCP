@@ -6,11 +6,13 @@
 //
 
 import SwiftUI
+import QuickLook
 
 struct FileBrowserView: View {
     @Bindable var viewModel: FileBrowserViewModel
     @Environment(\.openWindow) private var openWindow
-    
+    @State private var quickLookURL: URL?
+
     init(viewModel: FileBrowserViewModel) {
         self.viewModel = viewModel
     }
@@ -89,6 +91,7 @@ struct FileBrowserView: View {
                     await viewModel.disconnect()
                 }
             }
+            .quickLookPreview($quickLookURL)
             .onChange(of: viewModel.pendingFileInfoWindowId) { _, windowId in
                 if let windowId = windowId {
                     openWindow(id: WindowID.fileInfo, value: windowId)
@@ -245,6 +248,7 @@ struct FileBrowserView: View {
         VStack(spacing: 0) {
             BreadcrumbView(
                 components: viewModel.pathComponents,
+                currentPath: viewModel.currentPath,
                 onNavigate: { path in
                     Task {
                         await viewModel.navigateTo(path)
@@ -269,11 +273,24 @@ struct FileBrowserView: View {
             LoadingView(message: viewModel.isConnected ? "Loading..." : "Connecting...")
             
         case .success:
-            FileListView(
-                viewModel: viewModel,
-                onOpenEditor: openFileInEditor,
-                onGetInfo: showFileInfo
-            )
+            if viewModel.sortedFiles.isEmpty {
+                EmptyStateView(
+                    icon: "folder",
+                    title: "Empty Directory",
+                    message: "This directory is empty.\nDouble-click a file to open, press Space to preview.",
+                    actionTitle: "Upload Files",
+                    action: {
+                        Task { await viewModel.uploadFiles() }
+                    }
+                )
+            } else {
+                FileListView(
+                    viewModel: viewModel,
+                    onOpenEditor: openFileInEditor,
+                    onGetInfo: showFileInfo,
+                    onQuickLook: previewFile
+                )
+            }
             
         case .error(let error):
             ErrorView(error: error) {
@@ -347,6 +364,22 @@ struct FileBrowserView: View {
     private func showFileInfo(_ file: RemoteFile) {
         viewModel.showFileInfo(file)
     }
+
+    private func previewFile(_ file: RemoteFile) {
+        Task {
+            do {
+                let tempDir = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("macSCP-quicklook", isDirectory: true)
+                try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+                let tempURL = tempDir.appendingPathComponent(file.name)
+
+                try await viewModel.downloadFileForPreview(file, to: tempURL)
+                quickLookURL = tempURL
+            } catch {
+                viewModel.error = AppError.from(error)
+            }
+        }
+    }
 }
 
 // MARK: - Clipboard Status View
@@ -379,11 +412,17 @@ struct ActiveTransfersIndicator: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.blue)
                     .symbolEffect(.pulse, options: .repeating)
-                
+
                 ProgressView(value: viewModel.overallProgress)
                     .progressViewStyle(.linear)
                     .frame(width: 50)
-                
+
+                if let totalSpeed = viewModel.totalTransferSpeed {
+                    Text(totalSpeed)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+
                 Text("\(Int(viewModel.overallProgress * 100))%")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
