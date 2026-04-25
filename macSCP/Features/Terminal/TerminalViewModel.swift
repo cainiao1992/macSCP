@@ -21,8 +21,8 @@ enum TerminalState: Sendable, Equatable {
              (.connecting, .connecting),
              (.connected, .connected):
             return true
-        case (.error, .error):
-            return true
+        case (.error(let lhsError), .error(let rhsError)):
+            return lhsError.localizedDescription == rhsError.localizedDescription
         default:
             return false
         }
@@ -35,6 +35,7 @@ final class TerminalViewModel {
     // MARK: - Published State
     private(set) var state: TerminalState = .disconnected
     private(set) var isConnected: Bool = false
+    private(set) var isReconnecting: Bool = false
     var error: AppError?
     var isShowingHostKeyMismatchAlert = false
     private var detectedHostKeyMismatch = false
@@ -49,6 +50,12 @@ final class TerminalViewModel {
     /// Current terminal dimensions as a display string (e.g. "80 x 24")
     private(set) var terminalSizeText: String = TerminalSize.default.displayString
 
+    /// Time when the current connection was established
+    private(set) var connectedAt: Date?
+
+    /// Formatted connection duration string (e.g. "5m 32s")
+    private(set) var connectionDuration: String = ""
+
     // MARK: - Dependencies
     private let session: TerminalSessionProtocol
     private let connectionData: TerminalWindowData
@@ -57,9 +64,27 @@ final class TerminalViewModel {
     private var outputTask: Task<Void, Never>?
     private var pendingOutputBuffer: [Data] = []
 
+    // MARK: - Connection timeout
+    private var connectionTimeoutTask: Task<Void, Never>?
+    private(set) var connectionAttemptDuration: String = ""
+    private var connectionStartTime: Date?
+    private var connectionAttemptTimerTask: Task<Void, Never>?
+
+    // MARK: - Connection duration display
+    private var connectionDurationTask: Task<Void, Never>?
+
+    // MARK: - Auto-reconnect
+    private var autoReconnectTask: Task<Void, Never>?
+    private(set) var autoReconnectAttempt: Int = 0
+    private(set) var autoReconnectCountdown: String = ""
+    var isAutoReconnectEnabled: Bool = true
+    static let maxAutoReconnectAttempts = 5
+    private static let autoReconnectBaseDelay: TimeInterval = 2
+
+    static let connectionTimeoutInterval: TimeInterval = 30
+
     var onOutput: ((Data) -> Void)? {
         didSet {
-            // When callback is set, flush any buffered data
             if let callback = onOutput {
                 for data in pendingOutputBuffer {
                     callback(data)
@@ -72,6 +97,17 @@ final class TerminalViewModel {
     // MARK: - Terminal size
     private var currentSize: TerminalSize = .default
 
+    // MARK: - Terminal font size
+    var terminalFontSize: Int {
+        didSet {
+            UserDefaults.standard.set(terminalFontSize, forKey: "terminalFontSize")
+        }
+    }
+
+    static let minFontSize = 8
+    static let maxFontSize = 28
+    static let defaultFontSize = 16
+
     // MARK: - Initialization
 
     init(
@@ -82,12 +118,15 @@ final class TerminalViewModel {
         self.connectionName = connectionName
         self.session = session
         self.connectionData = connectionData
+        self.terminalFontSize = UserDefaults.standard.integer(forKey: "terminalFontSize")
+        if self.terminalFontSize == 0 {
+            self.terminalFontSize = Self.defaultFontSize
+        }
     }
 
     // MARK: - Connection
 
     func connect() async {
-        // Only connect if disconnected or in error state
         switch state {
         case .disconnected, .error:
             break
@@ -97,6 +136,9 @@ final class TerminalViewModel {
 
         state = .connecting
         detectedHostKeyMismatch = false
+        connectionStartTime = Date()
+        startConnectionAttemptTimer()
+        startConnectionTimeout()
 
         do {
             if connectionData.authMethod == .password {
@@ -118,14 +160,21 @@ final class TerminalViewModel {
                 )
             }
 
+            cancelConnectionTimeout()
+            cancelConnectionAttemptTimer()
+            isReconnecting = false
             isConnected = true
+            connectedAt = Date()
+            autoReconnectAttempt = 0
             state = .connected
-
-            // Start listening for output
+            startConnectionDurationDisplayTimer()
             startOutputListener()
 
             logInfo("Terminal connected to \(connectionData.host)", category: .network)
         } catch {
+            cancelConnectionTimeout()
+            cancelConnectionAttemptTimer()
+            isReconnecting = false
             logError("Terminal connection failed: \(error)", category: .network)
             let appError = AppError.from(error)
             state = .error(appError)
@@ -137,6 +186,10 @@ final class TerminalViewModel {
         outputTask?.cancel()
         outputTask = nil
         pendingOutputBuffer.removeAll()
+        cancelConnectionDurationDisplayTimer()
+        cancelAutoReconnect()
+        connectedAt = nil
+        connectionDuration = ""
 
         await session.disconnect()
         isConnected = false
@@ -146,6 +199,8 @@ final class TerminalViewModel {
     }
 
     func reconnect() async {
+        isReconnecting = true
+        cancelAutoReconnect()
         await disconnect()
         await connect()
     }
@@ -179,7 +234,6 @@ final class TerminalViewModel {
             for await data in stream {
                 guard !Task.isCancelled else { break }
 
-                // Check for host key mismatch in terminal output
                 if !detectedHostKeyMismatch {
                     if let text = String(data: data, encoding: .utf8),
                        (text.contains("REMOTE HOST IDENTIFICATION HAS CHANGED") || text.contains("Host key verification failed")) {
@@ -188,7 +242,6 @@ final class TerminalViewModel {
                 }
 
                 await MainActor.run {
-                    // Buffer data if callback not yet set, otherwise deliver immediately
                     if let callback = self.onOutput {
                         callback(data)
                     } else {
@@ -197,10 +250,10 @@ final class TerminalViewModel {
                 }
             }
 
-            // Stream ended - check if session ended gracefully or unexpectedly
             let graceful = await self.session.sessionEndedGracefully
             await MainActor.run {
                 if self.isConnected {
+                    self.cancelConnectionDurationDisplayTimer()
                     self.isConnected = false
                     if self.detectedHostKeyMismatch {
                         self.state = .error(.hostKeyMismatch(host: self.connectionData.host, port: self.connectionData.port))
@@ -209,6 +262,9 @@ final class TerminalViewModel {
                         self.state = .disconnected
                     } else {
                         self.state = .error(.terminalConnectionLost)
+                        if self.isAutoReconnectEnabled {
+                            self.startAutoReconnect()
+                        }
                     }
                 }
             }
@@ -218,7 +274,6 @@ final class TerminalViewModel {
     // MARK: - Terminal Size
 
     func resize(columns: Int, rows: Int) {
-        // Validate size - must be positive
         guard columns > 0 && rows > 0 else { return }
 
         currentSize = TerminalSize(columns: columns, rows: rows)
@@ -239,7 +294,24 @@ final class TerminalViewModel {
 
     func cleanup() async {
         onOutput = nil
+        cancelAutoReconnect()
         await disconnect()
+    }
+
+    // MARK: - Font Size
+
+    func increaseFontSize() {
+        guard terminalFontSize < Self.maxFontSize else { return }
+        terminalFontSize += 1
+    }
+
+    func decreaseFontSize() {
+        guard terminalFontSize > Self.minFontSize else { return }
+        terminalFontSize -= 1
+    }
+
+    func resetFontSize() {
+        terminalFontSize = Self.defaultFontSize
     }
 
     // MARK: - Host Key Mismatch
@@ -271,5 +343,144 @@ final class TerminalViewModel {
         if case .error = state {
             state = .disconnected
         }
+    }
+
+    // MARK: - Connection Timeout
+
+    private func startConnectionTimeout() {
+        connectionTimeoutTask?.cancel()
+        connectionTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.connectionTimeoutInterval))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.handleConnectionTimeout()
+            }
+        }
+    }
+
+    private func cancelConnectionTimeout() {
+        connectionTimeoutTask?.cancel()
+        connectionTimeoutTask = nil
+    }
+
+    private func handleConnectionTimeout() {
+        guard case .connecting = state else { return }
+        logError("Terminal connection timed out", category: .network)
+        cancelConnectionAttemptTimer()
+        let timeoutError = AppError.connectionTimeout
+        state = .error(timeoutError)
+        self.error = timeoutError
+        Task {
+            await session.disconnect()
+        }
+    }
+
+    func cancelConnection() async {
+        cancelConnectionTimeout()
+        cancelConnectionAttemptTimer()
+        await disconnect()
+    }
+
+    // MARK: - Connection Attempt Timer
+
+    private func startConnectionAttemptTimer() {
+        connectionAttemptTimerTask?.cancel()
+        connectionAttemptTimerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await MainActor.run {
+                    self?.updateConnectionAttemptDuration()
+                }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private func cancelConnectionAttemptTimer() {
+        connectionAttemptTimerTask?.cancel()
+        connectionAttemptTimerTask = nil
+        connectionAttemptDuration = ""
+    }
+
+    private func updateConnectionAttemptDuration() {
+        guard let start = connectionStartTime else { return }
+        let elapsed = Int(Date().timeIntervalSince(start))
+        connectionAttemptDuration = "\(elapsed)s"
+    }
+
+    // MARK: - Connection Duration Display
+
+    private func startConnectionDurationDisplayTimer() {
+        connectionDurationTask?.cancel()
+        connectionDurationTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await MainActor.run {
+                    self?.updateConnectionDuration()
+                }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private func cancelConnectionDurationDisplayTimer() {
+        connectionDurationTask?.cancel()
+        connectionDurationTask = nil
+        connectionDuration = ""
+    }
+
+    private func updateConnectionDuration() {
+        guard let start = connectedAt else { return }
+        let elapsed = Int(Date().timeIntervalSince(start))
+
+        if elapsed < 60 {
+            connectionDuration = "\(elapsed)s"
+        } else if elapsed < 3600 {
+            let minutes = elapsed / 60
+            let seconds = elapsed % 60
+            connectionDuration = "\(minutes)m \(seconds)s"
+        } else {
+            let hours = elapsed / 3600
+            let minutes = (elapsed % 3600) / 60
+            connectionDuration = "\(hours)h \(minutes)m"
+        }
+    }
+
+    // MARK: - Auto-Reconnect
+
+    private func startAutoReconnect() {
+        cancelAutoReconnect()
+        guard autoReconnectAttempt < Self.maxAutoReconnectAttempts else {
+            logInfo("Auto-reconnect: max attempts reached", category: .network)
+            return
+        }
+
+        autoReconnectAttempt += 1
+        let delay = Self.autoReconnectBaseDelay * pow(2.0, Double(autoReconnectAttempt - 1))
+        let clampedDelay = min(delay, 32.0)
+
+        logInfo("Auto-reconnect: attempt \(autoReconnectAttempt) in \(Int(clampedDelay))s", category: .network)
+
+        autoReconnectTask = Task { [weak self] in
+            let totalWait = Int(clampedDelay)
+            for remaining in stride(from: totalWait, through: 1, by: -1) {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self?.autoReconnectCountdown = "\(remaining)s"
+                }
+                try? await Task.sleep(for: .seconds(1))
+            }
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.autoReconnectCountdown = ""
+                self?.isReconnecting = true
+            }
+            await self?.reconnect()
+        }
+    }
+
+    private func cancelAutoReconnect() {
+        autoReconnectTask?.cancel()
+        autoReconnectTask = nil
+        autoReconnectAttempt = 0
+        autoReconnectCountdown = ""
     }
 }

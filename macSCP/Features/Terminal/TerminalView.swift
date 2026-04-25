@@ -31,6 +31,20 @@ struct TerminalContentView: View {
         .navigationTitle(viewModel.connectionName)
         .navigationSubtitle(navigationSubtitleText)
         .toolbar(id: "terminalToolbar") {
+            ToolbarItem(id: "disconnect", placement: .primaryAction) {
+                Button {
+                    Task {
+                        await viewModel.disconnect()
+                    }
+                } label: {
+                    Label("Disconnect", systemImage: "xmark.circle")
+                }
+                .disabled(!viewModel.isConnected)
+                .help("Disconnect")
+                .accessibilityLabel("Disconnect")
+                .accessibilityHint("Disconnect from the remote server")
+            }
+
             ToolbarItem(id: "reconnect", placement: .primaryAction) {
                 Button {
                     Task {
@@ -41,9 +55,29 @@ struct TerminalContentView: View {
                 }
                 .disabled(viewModel.state == .connecting)
                 .help("Reconnect")
+                .accessibilityLabel("Reconnect")
+                .accessibilityHint("Reconnect to the remote server")
             }
 
+            ToolbarItem(id: "decreaseFontSize", placement: .primaryAction) {
+                Button {
+                    viewModel.decreaseFontSize()
+                } label: {
+                    Label("Smaller Text", systemImage: "textformat.size.smaller")
+                }
+                .help("Decrease Font Size")
+                .accessibilityLabel("Decrease Font Size")
+            }
 
+            ToolbarItem(id: "increaseFontSize", placement: .primaryAction) {
+                Button {
+                    viewModel.increaseFontSize()
+                } label: {
+                    Label("Larger Text", systemImage: "textformat.size.larger")
+                }
+                .help("Increase Font Size")
+                .accessibilityLabel("Increase Font Size")
+            }
         }
         .task {
             await viewModel.connect()
@@ -56,23 +90,23 @@ struct TerminalContentView: View {
         .onChange(of: viewModel.state) { oldState, newState in
             // Show banner overlay when connection is lost while terminal was connected
             if case .connected = oldState, case .error = newState {
-                withAnimation(.easeInOut(duration: 0.25)) {
+                withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
                     showConnectionLostBanner = true
                     showSessionEndedBanner = false
                 }
             } else if case .connected = oldState, case .disconnected = newState {
                 // Graceful session end (e.g. CTRL-D / exit)
-                withAnimation(.easeInOut(duration: 0.25)) {
+                withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
                     showSessionEndedBanner = true
                     showConnectionLostBanner = false
                 }
             } else if case .connected = newState {
-                withAnimation(.easeInOut(duration: 0.25)) {
+                withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
                     showConnectionLostBanner = false
                     showSessionEndedBanner = false
                 }
             } else if case .connecting = newState {
-                withAnimation(.easeInOut(duration: 0.25)) {
+                withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
                     showConnectionLostBanner = false
                     showSessionEndedBanner = false
                 }
@@ -96,13 +130,23 @@ struct TerminalContentView: View {
     private var statusBar: some View {
         HStack(spacing: 12) {
             HStack(spacing: 5) {
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 7, height: 7)
+                TerminalStatusIndicator(
+                    state: viewModel.state,
+                    isSessionEnded: showSessionEndedBanner
+                )
 
                 Text(statusBarText)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(statusBarText)
+
+            // Connection duration
+            if viewModel.isConnected && !viewModel.connectionDuration.isEmpty {
+                Text(viewModel.connectionDuration)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.tertiary)
             }
 
             Spacer()
@@ -112,6 +156,7 @@ struct TerminalContentView: View {
                 Text(viewModel.terminalSizeText)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.tertiary)
+                    .accessibilityLabel("Terminal size: \(viewModel.terminalSizeText)")
             }
         }
         .padding(.horizontal, 12)
@@ -124,13 +169,28 @@ struct TerminalContentView: View {
         switch viewModel.state {
         case .disconnected:
             if showSessionEndedBanner {
-                // Session ended gracefully — preserve terminal content with overlay
-                ZStack {
+                // Session ended gracefully — show non-blocking top banner
+                ZStack(alignment: .top) {
                     SwiftTermView(viewModel: viewModel)
-                        .allowsHitTesting(false)
-                        .opacity(0.4)
 
-                    sessionEndedBanner
+                    TerminalBannerView(
+                        style: .info,
+                        title: "Session Ended",
+                        description: "The remote shell has exited.",
+                        actionLabel: "Reconnect",
+                        action: {
+                            Task {
+                                showSessionEndedBanner = false
+                                await viewModel.reconnect()
+                            }
+                        },
+                        dismiss: {
+                            showSessionEndedBanner = false
+                        }
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             } else {
                 ContentUnavailableView {
@@ -151,124 +211,97 @@ struct TerminalContentView: View {
             }
 
         case .connecting:
-            LoadingView(message: "Connecting...")
+            if viewModel.isReconnecting {
+                // Reconnecting — preserve terminal content with inline loading overlay
+                ZStack(alignment: .top) {
+                    SwiftTermView(viewModel: viewModel)
+
+                    InlineLoadingView(message: {
+                        var text = "Reconnecting..."
+                        if !viewModel.connectionAttemptDuration.isEmpty {
+                            text += " (\(viewModel.connectionAttemptDuration))"
+                        }
+                        return text
+                    }())
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            } else {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .controlSize(.large)
+
+                    HStack(spacing: 4) {
+                        Text("Connecting...")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.secondary)
+
+                        if !viewModel.connectionAttemptDuration.isEmpty {
+                            Text("(\(viewModel.connectionAttemptDuration))")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+
+                    Button("Cancel") {
+                        Task {
+                            await viewModel.cancelConnection()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
 
         case .connected:
             SwiftTermView(viewModel: viewModel)
+                .accessibilityLabel("Terminal output")
 
         case .error:
             if showConnectionLostBanner {
-                // Keep the terminal visible with a reconnect banner overlay
-                ZStack {
+                // Connection lost — show non-blocking top banner
+                ZStack(alignment: .top) {
                     SwiftTermView(viewModel: viewModel)
-                        .allowsHitTesting(false)
-                        .opacity(0.4)
 
-                    connectionLostBanner
+                    TerminalBannerView(
+                        style: .error,
+                        title: "Connection Lost",
+                        description: {
+                            if !viewModel.autoReconnectCountdown.isEmpty {
+                                return "Reconnecting in \(viewModel.autoReconnectCountdown)... (attempt \(viewModel.autoReconnectAttempt)/\(TerminalViewModel.maxAutoReconnectAttempts))"
+                            } else if case .error(let error) = viewModel.state {
+                                return error.localizedDescription
+                            }
+                            return nil
+                        }(),
+                        actionLabel: "Reconnect",
+                        action: {
+                            Task {
+                                showConnectionLostBanner = false
+                                await viewModel.reconnect()
+                            }
+                        },
+                        dismiss: {
+                            showConnectionLostBanner = false
+                        }
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             } else {
-                // Initial connection error — no terminal to preserve
-                ContentUnavailableView {
-                    Label("Connection Failed", systemImage: "wifi.exclamationmark")
-                } description: {
-                    if case .error(let error) = viewModel.state {
-                        Text(error.localizedDescription)
-                    }
-                } actions: {
-                    Button {
+                // Initial connection error — show categorized error view
+                if case .error(let error) = viewModel.state {
+                    TerminalConnectionErrorView(error: error) {
                         Task {
                             await viewModel.reconnect()
                         }
-                    } label: {
-                        Text("Try Again")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
                 }
             }
-        }
-    }
-
-    private var sessionEndedBanner: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "terminal")
-                .font(.system(size: 28, weight: .medium))
-                .foregroundStyle(.secondary)
-
-            Text("Session Ended")
-                .font(.system(size: 15, weight: .semibold))
-
-            Text("The remote shell has exited.")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            Button {
-                Task {
-                    showSessionEndedBanner = false
-                    await viewModel.reconnect()
-                }
-            } label: {
-                Label("Reconnect", systemImage: "arrow.clockwise")
-                    .font(.system(size: 13, weight: .medium))
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.regular)
-        }
-        .padding(32)
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 5)
-        }
-    }
-
-    private var connectionLostBanner: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "wifi.slash")
-                .font(.system(size: 28, weight: .medium))
-                .foregroundStyle(.secondary)
-
-            Text("Connection Lost")
-                .font(.system(size: 15, weight: .semibold))
-
-            if case .error(let error) = viewModel.state {
-                Text(error.localizedDescription)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            Button {
-                Task {
-                    showConnectionLostBanner = false
-                    await viewModel.reconnect()
-                }
-            } label: {
-                Label("Reconnect", systemImage: "arrow.clockwise")
-                    .font(.system(size: 13, weight: .medium))
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.regular)
-        }
-        .padding(32)
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 5)
-        }
-    }
-
-    private var statusColor: SwiftUI.Color {
-        switch viewModel.state {
-        case .connected:
-            return .green
-        case .connecting:
-            return .orange
-        case .disconnected:
-            return showSessionEndedBanner ? .gray : .red
-        case .error:
-            return .red
         }
     }
 
@@ -309,6 +342,10 @@ struct SwiftTermView: NSViewRepresentable {
     func makeNSView(context: Context) -> TerminalView {
         let terminal = TerminalView()
         terminal.terminalDelegate = context.coordinator
+        terminal.font = NSFont.monospacedSystemFont(
+            ofSize: CGFloat(viewModel.terminalFontSize),
+            weight: .regular
+        )
         context.coordinator.terminal = terminal
 
         // Set up output callback
@@ -328,6 +365,15 @@ struct SwiftTermView: NSViewRepresentable {
 
     func updateNSView(_ terminal: TerminalView, context: Context) {
         context.coordinator.terminal = terminal
+
+        // Update font size when it changes
+        let newFont = NSFont.monospacedSystemFont(
+            ofSize: CGFloat(viewModel.terminalFontSize),
+            weight: .regular
+        )
+        if terminal.font != newFont {
+            terminal.font = newFont
+        }
     }
 
     func makeCoordinator() -> Coordinator {

@@ -61,6 +61,9 @@ struct TerminalWindow: View {
             session: session,
             connectionData: data
         )
+
+        // Clean up sensitive data from WindowManager after use
+        windowManager.removeTerminalData(for: windowId)
     }
 }
 

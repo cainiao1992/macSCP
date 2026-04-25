@@ -2,17 +2,27 @@
 
 # macSCP DMG Creator Script
 # This script creates a distributable DMG installer for macSCP
+# Version is read automatically from Xcode project settings
 
 set -e
 
 APP_NAME="macSCP"
-VERSION="1.1.0"
+
+# Read version from Xcode project settings
+VERSION=$(xcodebuild -scheme macSCP -showBuildSettings 2>/dev/null | grep MARKETING_VERSION | head -1 | awk '{print $3}')
+if [ -z "${VERSION}" ]; then
+    echo "❌ Failed to read MARKETING_VERSION from Xcode project"
+    exit 1
+fi
+
+BUILD_NUMBER=$(xcodebuild -scheme macSCP -showBuildSettings 2>/dev/null | grep CURRENT_PROJECT_VERSION | head -1 | awk '{print $3}')
+
 DMG_NAME="${APP_NAME}-${VERSION}"
 BUILD_DIR="build"
 DMG_DIR="dmg-staging"
 FINAL_DMG="${DMG_NAME}.dmg"
 
-echo "🚀 Building macSCP..."
+echo "🚀 Building macSCP ${VERSION} (build ${BUILD_NUMBER})..."
 
 # Archive the app (Release build)
 xcodebuild archive \
@@ -74,11 +84,23 @@ if [ -n "${SIGN_UPDATE}" ]; then
     SIGNATURE_OUTPUT=$("${SIGN_UPDATE}" "${FINAL_DMG}")
     echo "✅ DMG signed successfully"
     echo ""
-    echo "📋 Add the following to appcast.xml <enclosure> tag:"
-    echo "${SIGNATURE_OUTPUT}"
+    echo "📋 Add the following to appcast.xml <item>:"
     echo ""
+    echo "<item>"
+    echo "    <title>Version ${VERSION}</title>"
+    echo "    <pubDate>$(date -u '+%a, %d %b %Y %H:%M:%S +0000')</pubDate>"
+    echo "    <sparkle:version>${BUILD_NUMBER}</sparkle:version>"
+    echo "    <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"
+    echo "    <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>"
+    echo "    <description><![CDATA[<ul><li>See release notes on GitHub</li></ul>]]></description>"
+    echo "    <enclosure"
+    echo "        url=\"https://github.com/cainiao1992/macSCP/releases/download/v${VERSION}/macSCP-${VERSION}.dmg\""
+    echo "        type=\"application/octet-stream\""
     DMG_LENGTH=$(stat -f%z "${FINAL_DMG}")
-    echo "length=\"${DMG_LENGTH}\""
+    echo "        sparkle:edSignature=\"${SIGNATURE_OUTPUT##*=: }\""
+    echo "        length=\"${DMG_LENGTH}\""
+    echo "    />"
+    echo "</item>"
 else
     echo "⚠️  sign_update not found in DerivedData. Build the project in Xcode first to resolve Sparkle SPM package."
     echo "   Then run: find ~/Library/Developer/Xcode/DerivedData/macSCP-*/SourcePackages/artifacts/sparkle/Sparkle/bin -name sign_update"
