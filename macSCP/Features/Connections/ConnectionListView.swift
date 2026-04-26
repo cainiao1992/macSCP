@@ -66,7 +66,6 @@ struct ConnectionListView: View {
             detailColumn
         }
         .navigationTitle("")
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .searchable(text: $viewModel.searchText, prompt: "Search connections")
             .accessibilityIdentifier("searchField")
         .onChange(of: viewModel.selectedSidebarItem) {
