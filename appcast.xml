@@ -4,5 +4,25 @@
         <title>macSCP Updates</title>
         <description>Most recent changes with links to updates.</description>
         <language>en</language>
+        <item>
+            <title>Version 1.2.0</title>
+            <pubDate>Sat, 26 Apr 2025 10:28:00 +0000</pubDate>
+            <sparkle:version>10200</sparkle:version>
+            <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<ul>
+<li>Terminal UX overhaul: animated status indicators, auto-reconnect, font size adjustment, connection duration display</li>
+<li>SFTP browser UX improvements</li>
+<li>Fork migration to cainiao1992/macSCP</li>
+<li>Fixed TerminalState Equatable bug and credential memory leak</li>
+<li>Centralized version management via Version.xcconfig</li>
+</ul>]]></description>
+            <enclosure
+                url="https://github.com/cainiao1992/macSCP/releases/download/v1.2.0/macSCP-1.2.0.dmg"
+                type="application/octet-stream"
+                sparkle:edSignature="6eMw696MfRIP82HzTOLGkb9fWOoGBRW4H+z+SeJdQKBdY0jl6+L9uF1N+9KfwlEbQX1Meft6vWlceMRwofKTAg=="
+                length="19370272"
+            />
+        </item>
     </channel>
 </rss>
