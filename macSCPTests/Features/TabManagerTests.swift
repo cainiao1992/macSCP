@@ -500,4 +500,80 @@ final class TabManagerTests: XCTestCase {
         XCTAssertEqual(sut.tabs[0].connectionName, "A")
         XCTAssertEqual(sut.tabs[1].connectionName, "B")
     }
+
+    // MARK: - Keyboard Navigation Tests
+
+    func testSwitchToNextTab_wrapsAround() {
+        // Given — 3 tabs, active = 2 (last)
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        let conn3 = makeConnection(name: "C")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 2)
+        XCTAssertEqual(sut.activeTabIndex, 2)
+
+        // When
+        sut.switchToNextTab()
+
+        // Then — wraps around to index 0
+        XCTAssertEqual(sut.activeTabIndex, 0)
+        XCTAssertEqual(sut.activeTab?.connectionName, "A")
+    }
+
+    func testSwitchToPreviousTab_wrapsAround() {
+        // Given — 3 tabs, active = 0 (first)
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        let conn3 = makeConnection(name: "C")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 0)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+
+        // When
+        sut.switchToPreviousTab()
+
+        // Then — wraps around to last index (2)
+        XCTAssertEqual(sut.activeTabIndex, 2)
+        XCTAssertEqual(sut.activeTab?.connectionName, "C")
+    }
+
+    func testSwitchToNextTab_noTabs_noop() {
+        // Given — no tabs
+        XCTAssertNil(sut.activeTabIndex)
+
+        // When
+        sut.switchToNextTab()
+
+        // Then — no crash, still nil
+        XCTAssertNil(sut.activeTabIndex)
+    }
+
+    func testSwitchToNextTab_singleTab_noop() {
+        // Given — 1 tab, active = 0
+        let conn = makeConnection()
+        sut.openTab(connection: conn, password: "p")
+        sut.switchToTab(at: 0)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+
+        // When
+        sut.switchToNextTab()
+
+        // Then — stays at 0 (no wrap needed with single tab)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+    }
+
+    func testSwitchToPreviousTab_noTabs_noop() {
+        // Given — no tabs
+        XCTAssertNil(sut.activeTabIndex)
+
+        // When
+        sut.switchToPreviousTab()
+
+        // Then — no crash, still nil
+        XCTAssertNil(sut.activeTabIndex)
+    }
 }

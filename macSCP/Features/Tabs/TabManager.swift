@@ -172,4 +172,18 @@ import Foundation
         logInfo("Switched to tab for connection \(connectionId)", category: .ui)
         return true
     }
+
+    // MARK: - Keyboard Navigation
+
+    func switchToNextTab() {
+        guard let currentIndex = activeTabIndex, tabs.count > 1 else { return }
+        activeTabIndex = (currentIndex + 1) % tabs.count
+        logInfo("Switched to next tab (index \(activeTabIndex!))", category: .ui)
+    }
+
+    func switchToPreviousTab() {
+        guard let currentIndex = activeTabIndex, tabs.count > 1 else { return }
+        activeTabIndex = (currentIndex - 1 + tabs.count) % tabs.count
+        logInfo("Switched to previous tab (index \(activeTabIndex!))", category: .ui)
+    }
 }

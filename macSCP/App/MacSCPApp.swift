@@ -102,6 +102,11 @@ struct MacSCPApp: App {
             }
             .keyboardShortcut("n", modifiers: .command)
 
+            Button("New Tab") {
+                connectionListViewModel.isShowingNewConnectionSheet = true
+            }
+            .keyboardShortcut("t", modifiers: .command)
+
             Button("New Folder") {
                 connectionListViewModel.isShowingNewFolderSheet = true
             }
@@ -113,6 +118,26 @@ struct MacSCPApp: App {
                 // Handled by active window
             }
             .keyboardShortcut("r", modifiers: .command)
+
+            Button("Close Tab") {
+                Task {
+                    await container.tabManager.closeTab(at: container.tabManager.activeTabIndex ?? 0)
+                }
+            }
+            .keyboardShortcut("w", modifiers: .command)
+            .disabled(!container.tabManager.hasTabs)
+
+            Divider()
+
+            Button("Next Tab") {
+                container.tabManager.switchToNextTab()
+            }
+            .keyboardShortcut(.tab, modifiers: .control)
+
+            Button("Previous Tab") {
+                container.tabManager.switchToPreviousTab()
+            }
+            .keyboardShortcut(.tab, modifiers: [.control, .shift])
         }
 
         CommandGroup(replacing: .help) {
