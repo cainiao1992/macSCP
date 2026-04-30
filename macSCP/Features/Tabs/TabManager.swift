@@ -34,7 +34,7 @@ import Foundation
         self.viewModelFactory = viewModelFactory
     }
 
-    convenience init(dependencyContainer: DependencyContainer = .shared) {
+    convenience init(dependencyContainer: DependencyContainer) {
         self.init { connection, password in
             if connection.connectionType == .s3 {
                 let session = dependencyContainer.makeS3Session()
@@ -48,6 +48,10 @@ import Foundation
                 )
             }
         }
+    }
+
+    convenience init() {
+        self.init(dependencyContainer: .shared)
     }
 
     // MARK: - Open

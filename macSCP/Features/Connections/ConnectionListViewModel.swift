@@ -220,7 +220,10 @@ final class ConnectionListViewModel {
     func moveConnection(_ connection: Connection, to folder: Folder?) async {
         do {
             try await connectionRepository.move(connectionId: connection.id, toFolderId: folder?.id)
-            await loadData()
+            // Update local state directly to avoid .loading flash
+            if let index = connections.firstIndex(where: { $0.id == connection.id }) {
+                connections[index].folderId = folder?.id
+            }
             logInfo("Connection moved: \(connection.name)", category: .database)
         } catch {
             logError("Failed to move connection: \(error)", category: .database)

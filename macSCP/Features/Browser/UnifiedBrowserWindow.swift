@@ -14,6 +14,7 @@ struct UnifiedBrowserWindow: View {
     var body: some View {
         NavigationSplitView {
             ConnectionSidebarView(viewModel: connectionListViewModel)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
             VStack(spacing: 0) {
                 TabBarView(tabManager: tabManager)
@@ -26,7 +27,6 @@ struct UnifiedBrowserWindow: View {
             minHeight: WindowSize.minFileBrowser.height
         )
     }
-
 }
 
 // MARK: - Preview

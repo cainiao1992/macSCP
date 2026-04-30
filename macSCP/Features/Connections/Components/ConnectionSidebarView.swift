@@ -7,11 +7,14 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ConnectionSidebarView: View {
     @Bindable var viewModel: ConnectionListViewModel
     @Environment(\.openWindow) private var openWindow
     @State private var newFolderName = ""
+    @State private var folderToRename: Folder?
+    @State private var renameText = ""
 
     var body: some View {
         Group {
@@ -142,6 +145,25 @@ struct ConnectionSidebarView: View {
                 Text("Are you sure you want to delete \"\(folder.name)\"? \(count > 0 ? "The \(count) connection(s) in this folder will be moved to All Connections." : "")")
             }
         }
+        .alert("Rename Folder", isPresented: Binding(
+            get: { folderToRename != nil },
+            set: { if !$0 { folderToRename = nil } }
+        )) {
+            TextField("Folder name", text: $renameText)
+            Button("Rename") {
+                let name = renameText.trimmed
+                if !name.isEmpty, let folder = folderToRename {
+                    Task { await viewModel.renameFolder(folder, to: name) }
+                }
+                folderToRename = nil
+            }
+            .keyboardShortcut(.defaultAction)
+            Button("Cancel", role: .cancel) {
+                folderToRename = nil
+            }
+        } message: {
+            Text("Enter a new name for the folder.")
+        }
         .errorAlert($viewModel.error)
         // MARK: - Terminal Window
         .onChange(of: viewModel.pendingTerminalWindowId) { _, windowId in
@@ -158,32 +180,65 @@ struct ConnectionSidebarView: View {
     @ViewBuilder
     private var connectionSections: some View {
         List {
-            // Unfoldered connections ("All Connections")
+            // Unfoldered connections ("All Connections") — always visible as drop target
             let unfoldered = viewModel.filteredConnections.filter { $0.folderId == nil }
-            if !unfoldered.isEmpty {
-                Section {
-                    ForEach(unfoldered) { connection in
-                        connectionRow(connection)
-                    }
-                } header: {
-                    Label("All Connections", systemImage: "server.rack")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
+            Label("All Connections", systemImage: "server.rack")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onDrop(of: [.connection], delegate: ConnectionDropDelegate(
+                    targetFolder: nil,
+                    viewModel: viewModel
+                ))
+                .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+
+            ForEach(unfoldered) { connection in
+                connectionRow(connection)
             }
 
             // Folder sections
             ForEach(viewModel.folders) { folder in
                 let folderConnections = viewModel.filteredConnections.filter { $0.folderId == folder.id }
-                if !folderConnections.isEmpty {
-                    Section {
-                        ForEach(folderConnections) { connection in
-                            connectionRow(connection)
+
+                // Folder header row (droppable + context menu)
+                Label(folder.name, systemImage: "folder")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onDrop(of: [.connection], delegate: ConnectionDropDelegate(
+                        targetFolder: folder,
+                        viewModel: viewModel
+                    ))
+                    .contextMenu {
+                        Button {
+                            folderToRename = folder
+                            renameText = folder.name
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
                         }
-                    } header: {
-                        Label(folder.name, systemImage: "folder")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            viewModel.confirmDeleteFolder(folder)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                    .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+
+                if folderConnections.isEmpty {
+                    Text("No connections")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .listRowInsets(EdgeInsets(top: 2, leading: 12, bottom: 2, trailing: 12))
+                } else {
+                    ForEach(folderConnections) { connection in
+                        connectionRow(connection)
                     }
                 }
             }
@@ -199,6 +254,9 @@ struct ConnectionSidebarView: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 viewModel.connectToServer(connection)
+            }
+            .onDrag {
+                connection.toNSItemProvider()
             }
             .accessibilityIdentifier("connectionRow_\(connection.name)")
             .contextMenu {
@@ -255,6 +313,61 @@ struct ConnectionSidebarView: View {
         ) {
             viewModel.isShowingNewConnectionSheet = true
         }
+    }
+}
+
+// MARK: - Connection NSItemProvider helpers
+
+extension Connection {
+    func toNSItemProvider() -> NSItemProvider {
+        let provider = NSItemProvider()
+        if let data = try? JSONEncoder().encode(self) {
+            provider.registerDataRepresentation(
+                forTypeIdentifier: UTType.connection.identifier,
+                visibility: .all
+            ) { completion in
+                completion(data, nil)
+                return nil
+            }
+        }
+        return provider
+    }
+
+    static func from(_ provider: NSItemProvider) -> Connection? {
+        guard provider.hasItemConformingToTypeIdentifier(UTType.connection.identifier) else {
+            return nil
+        }
+        var result: Connection?
+        let semaphore = DispatchSemaphore(value: 0)
+        _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.connection.identifier) { data, _ in
+            defer { semaphore.signal() }
+            guard let data = data else { return }
+            result = try? JSONDecoder().decode(Connection.self, from: data)
+        }
+        semaphore.wait()
+        return result
+    }
+}
+
+// MARK: - Drop Delegate
+
+struct ConnectionDropDelegate: DropDelegate {
+    let targetFolder: Folder?
+    let viewModel: ConnectionListViewModel
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard let item = info.itemProviders(for: [.connection]).first else {
+            return false
+        }
+        _ = item.loadDataRepresentation(forTypeIdentifier: UTType.connection.identifier) { data, _ in
+            guard let data = data,
+                  let connection = try? JSONDecoder().decode(Connection.self, from: data)
+            else { return }
+            Task { @MainActor in
+                await viewModel.moveConnection(connection, to: targetFolder)
+            }
+        }
+        return true
     }
 }
 

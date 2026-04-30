@@ -87,6 +87,13 @@ struct ConnectionListColumn: View {
     private var connectionList: some View {
         List(viewModel.filteredConnections, selection: $viewModel.selectedConnectionId) { connection in
             ConnectionRowView(connection: connection)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    DependencyContainer.shared.tabManager.openTab(
+                        connection: connection,
+                        password: viewModel.getSavedPassword(for: connection) ?? ""
+                    )
+                }
                 .accessibilityIdentifier("connectionRow_\(connection.name)")
                 .draggable(connection)
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
