@@ -261,4 +261,117 @@ final class TabManagerTests: XCTestCase {
             XCTAssertTrue(wasCalled)
         }
     }
+
+    // MARK: - State Independence Tests
+
+    func testTabStateIndependence_switchingTabs_preservesState() async {
+        // Given — two tabs, each with independent VMs
+        let conn1 = makeConnection(name: "Server1", host: "host1.com")
+        let conn2 = makeConnection(name: "Server2", host: "host2.com")
+        sut.openTab(connection: conn1, password: "pass1")
+        sut.openTab(connection: conn2, password: "pass2")
+
+        let tab0VM = sut.tabs[0].viewModel
+        let tab1VM = sut.tabs[1].viewModel
+
+        // Mutate tab 0's VM state directly (independent of session)
+        tab0VM.sortCriteria = .date
+        tab0VM.sortAscending = false
+        tab0VM.showHiddenFiles = true
+
+        // Tab 1 should still have default state
+        XCTAssertEqual(tab1VM.sortCriteria, .name, "Tab 1 sort criteria should be default")
+        XCTAssertTrue(tab1VM.sortAscending, "Tab 1 sort ascending should be default")
+        XCTAssertFalse(tab1VM.showHiddenFiles, "Tab 1 showHiddenFiles should be default")
+
+        // When — switch to tab 1, then back to tab 0
+        sut.switchToTab(at: 1)
+        XCTAssertEqual(sut.activeTabIndex, 1)
+
+        sut.switchToTab(at: 0)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+
+        // Then — tab 0's VM state is preserved
+        XCTAssertEqual(tab0VM.sortCriteria, .date,
+                       "Tab 0's sort criteria must survive switching away and back")
+        XCTAssertFalse(tab0VM.sortAscending,
+                       "Tab 0's sort ascending must survive switching away and back")
+        XCTAssertTrue(tab0VM.showHiddenFiles,
+                      "Tab 0's showHiddenFiles must survive switching away and back")
+
+        // Tab 1's state is unaffected
+        XCTAssertEqual(tab1VM.sortCriteria, .name,
+                       "Tab 1's state must not be affected by tab 0's mutations")
+    }
+
+    func testTabStateIndependence_closingTab_doesNotAffectOthers() async {
+        // Given — 3 tabs with independent VMs
+        let conn1 = makeConnection(name: "S1")
+        let conn2 = makeConnection(name: "S2")
+        let conn3 = makeConnection(name: "S3")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+
+        let tab0VM = sut.tabs[0].viewModel
+        let tab1VM = sut.tabs[1].viewModel
+        let tab2VM = sut.tabs[2].viewModel
+
+        // Mutate each tab's VM state
+        tab0VM.sortCriteria = .date
+        tab1VM.sortAscending = false
+        tab2VM.showHiddenFiles = true
+
+        // Verify initial state
+        XCTAssertEqual(tab0VM.sortCriteria, .date)
+        XCTAssertEqual(tab1VM.sortAscending, false)
+        XCTAssertTrue(tab2VM.showHiddenFiles)
+
+        // When — close the middle tab (index 1)
+        sut.switchToTab(at: 1)
+        await sut.closeTab(at: 1)
+
+        // Then — only 2 tabs remain, unaffected
+        XCTAssertEqual(sut.tabs.count, 2)
+        XCTAssertEqual(tab0VM.sortCriteria, .date,
+                       "Tab 0's state must not change when tab 1 is closed")
+        XCTAssertTrue(tab2VM.showHiddenFiles,
+                      "Tab 2's state must not change when tab 1 is closed")
+    }
+
+    func testOpenTab_setsActiveToNewTab() {
+        // Given — one tab already open
+        let conn1 = makeConnection(name: "Existing")
+        sut.openTab(connection: conn1, password: "p")
+        XCTAssertEqual(sut.activeTabIndex, 0)
+
+        // When — open a second tab
+        let conn2 = makeConnection(name: "New")
+        sut.openTab(connection: conn2, password: "p")
+
+        // Then — active tab is the newly opened one
+        XCTAssertEqual(sut.activeTabIndex, 1)
+        XCTAssertEqual(sut.activeTab?.connectionName, "New")
+    }
+
+    func testCloseActiveTab_switchesToAdjacent() async {
+        // Given — 3 tabs, active is tab 1 (middle)
+        let conn1 = makeConnection(name: "Left")
+        let conn2 = makeConnection(name: "Middle")
+        let conn3 = makeConnection(name: "Right")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 1)
+        XCTAssertEqual(sut.activeTabIndex, 1)
+
+        // When — close the active (middle) tab
+        await sut.closeTab(at: 1)
+
+        // Then — active stays at index 1, which now points to "Right"
+        XCTAssertEqual(sut.tabs.count, 2)
+        XCTAssertEqual(sut.activeTabIndex, 1)
+        XCTAssertEqual(sut.activeTab?.connectionName, "Right",
+                       "After closing active middle tab, the next tab should become active")
+    }
 }
