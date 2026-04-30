@@ -2,17 +2,18 @@
 //  UnifiedBrowserWindow.swift
 //  macSCP
 //
-//  Single-window shell: sidebar placeholder + tab strip + tab content.
+//  Single-window shell: connection sidebar + tab strip + tab content.
 //
 
 import SwiftUI
 
 struct UnifiedBrowserWindow: View {
     let tabManager: TabManager
+    @Bindable var connectionListViewModel: ConnectionListViewModel
 
     var body: some View {
         NavigationSplitView {
-            sidebarPlaceholder
+            ConnectionSidebarView(viewModel: connectionListViewModel)
         } detail: {
             VStack(spacing: 0) {
                 TabBarView(tabManager: tabManager)
@@ -26,23 +27,6 @@ struct UnifiedBrowserWindow: View {
         )
     }
 
-    // MARK: - Sidebar Placeholder (S02 will replace with real connection list)
-
-    private var sidebarPlaceholder: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "sidebar.left")
-                .font(.system(size: 28))
-                .foregroundStyle(.secondary)
-            Text("Connections")
-                .font(.headline)
-            Text("Connection list will be integrated in the next slice.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }
 
 // MARK: - Preview
@@ -50,5 +34,6 @@ struct UnifiedBrowserWindow: View {
 #Preview {
     let container = DependencyContainer.shared
     let manager = TabManager(dependencyContainer: container)
-    UnifiedBrowserWindow(tabManager: manager)
+    let vm = container.makeConnectionListViewModel()
+    UnifiedBrowserWindow(tabManager: manager, connectionListViewModel: vm)
 }

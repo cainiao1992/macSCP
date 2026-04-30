@@ -12,6 +12,7 @@ import Sparkle
 @main
 struct MacSCPApp: App {
     @StateObject private var container: DependencyContainer
+    @State private var connectionListViewModel: ConnectionListViewModel
 
     private let updaterController: SPUStandardUpdaterController
     @StateObject private var checkForUpdatesViewModel: CheckForUpdatesViewModel
@@ -19,6 +20,7 @@ struct MacSCPApp: App {
     init() {
         let container = DependencyContainer.shared
         self._container = StateObject(wrappedValue: container)
+        self._connectionListViewModel = State(initialValue: container.makeConnectionListViewModel())
 
         AnalyticsService.initialize()
         AppLockManager.shared.lockIfNeeded()
@@ -35,24 +37,19 @@ struct MacSCPApp: App {
     }
 
     var body: some Scene {
-        // Main Window - Connection List
-        WindowGroup {
-            ConnectionListView(viewModel: container.makeConnectionListViewModel())
-                .appLockOverlay()
-        }
-        .modelContainer(container.modelContainer)
-        .defaultSize(WindowSize.main)
-        .commands {
-            appCommands
-        }
-
-        // Unified Browser Window (tabbed file browser)
+        // Unified Browser Window (tabbed file browser + connection sidebar)
         WindowGroup("macSCP") {
-            UnifiedBrowserWindow(tabManager: container.tabManager)
-                .appLockOverlay()
+            UnifiedBrowserWindow(
+                tabManager: container.tabManager,
+                connectionListViewModel: connectionListViewModel
+            )
+            .appLockOverlay()
         }
         .modelContainer(container.modelContainer)
         .defaultSize(WindowSize.fileBrowser)
+        .commands {
+            appCommands
+        }
 
         // File Editor Window
         WindowGroup(id: WindowID.fileEditor, for: String.self) { $windowId in
@@ -101,12 +98,12 @@ struct MacSCPApp: App {
 
         CommandGroup(replacing: .newItem) {
             Button("New Connection") {
-                // Handled by main window
+                connectionListViewModel.isShowingNewConnectionSheet = true
             }
             .keyboardShortcut("n", modifiers: .command)
 
             Button("New Folder") {
-                // Handled by main window
+                connectionListViewModel.isShowingNewFolderSheet = true
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
         }
