@@ -49,6 +49,12 @@ final class DependencyContainer: ObservableObject {
         WindowManager.shared
     }()
 
+    // MARK: - Tab Manager
+
+    lazy var tabManager: TabManager = {
+        TabManager(dependencyContainer: self)
+    }()
+
     // MARK: - SFTP Session Factory
     func makeSFTPSession(privateKeyPath: String? = nil) -> SFTPSessionProtocol {
         SystemSFTPSession()
@@ -80,7 +86,8 @@ final class DependencyContainer: ObservableObject {
             connectionRepository: connectionRepository,
             folderRepository: folderRepository,
             keychainService: keychainService,
-            windowManager: windowManager
+            windowManager: windowManager,
+            tabManager: tabManager
         )
     }
 
@@ -112,6 +119,26 @@ final class DependencyContainer: ObservableObject {
             clipboardService: clipboardService,
             secretAccessKey: secretAccessKey
         )
+    }
+
+    /// Unified factory: creates the right FileBrowserViewModel from connection data + password/secret.
+    /// Handles both SFTP and S3 branching internally.
+    func makeFileBrowserViewModel(connection: Connection, password: String) -> FileBrowserViewModel {
+        if connection.connectionType == .s3 {
+            let session = makeS3Session()
+            return makeS3FileBrowserViewModel(
+                connection: connection,
+                s3Session: session,
+                secretAccessKey: password
+            )
+        } else {
+            let session = makeSFTPSession(privateKeyPath: connection.privateKeyPath)
+            return makeFileBrowserViewModel(
+                connection: connection,
+                sftpSession: session,
+                password: password
+            )
+        }
     }
 
     func makeFileEditorViewModel(

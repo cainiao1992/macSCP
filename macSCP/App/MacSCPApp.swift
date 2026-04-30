@@ -46,12 +46,10 @@ struct MacSCPApp: App {
             appCommands
         }
 
-        // File Browser Window
-        WindowGroup(id: WindowID.fileBrowser, for: String.self) { $windowId in
-            if let windowId = windowId {
-                FileBrowserWindow(windowId: windowId)
-                    .appLockOverlay()
-            }
+        // Unified Browser Window (tabbed file browser)
+        WindowGroup("macSCP") {
+            UnifiedBrowserWindow(tabManager: container.tabManager)
+                .appLockOverlay()
         }
         .modelContainer(container.modelContainer)
         .defaultSize(WindowSize.fileBrowser)

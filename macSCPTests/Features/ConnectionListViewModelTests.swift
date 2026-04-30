@@ -31,7 +31,10 @@ final class ConnectionListViewModelTests: XCTestCase {
             connectionRepository: mockConnectionRepository,
             folderRepository: mockFolderRepository,
             keychainService: mockKeychainService,
-            windowManager: mockWindowManager
+            windowManager: mockWindowManager,
+            tabManager: TabManager(viewModelFactory: { _, _ in
+                fatalError("TabManager factory called in test — not expected")
+            })
         )
     }
 

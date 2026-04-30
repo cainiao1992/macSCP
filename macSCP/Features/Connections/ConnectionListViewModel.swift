@@ -39,7 +39,6 @@ final class ConnectionListViewModel {
     var folderToDelete: Folder?
 
     // Window opening state
-    var pendingWindowId: String?
     var pendingTerminalWindowId: String?
 
     // MARK: - Dependencies
@@ -47,18 +46,21 @@ final class ConnectionListViewModel {
     private let folderRepository: FolderRepositoryProtocol
     private let keychainService: KeychainServiceProtocol
     private let windowManager: WindowManager
+    private let tabManager: TabManager
 
     // MARK: - Initialization
     init(
         connectionRepository: ConnectionRepositoryProtocol,
         folderRepository: FolderRepositoryProtocol,
         keychainService: KeychainServiceProtocol,
-        windowManager: WindowManager
+        windowManager: WindowManager,
+        tabManager: TabManager
     ) {
         self.connectionRepository = connectionRepository
         self.folderRepository = folderRepository
         self.keychainService = keychainService
         self.windowManager = windowManager
+        self.tabManager = tabManager
     }
 
     // MARK: - Computed Properties
@@ -344,31 +346,13 @@ final class ConnectionListViewModel {
     }
 
     private func openFileBrowser(for connection: Connection, password: String) {
-        let data = FileBrowserWindowData(
-            connectionId: connection.id,
-            connectionName: connection.name,
-            host: connection.host,
-            port: connection.port,
-            username: connection.username,
-            password: password,
-            authMethod: connection.authMethod,
-            privateKeyPath: connection.privateKeyPath,
-            connectionType: connection.connectionType,
-            s3Region: connection.s3Region,
-            s3Bucket: connection.s3Bucket,
-            s3Endpoint: connection.s3Endpoint,
-            s3SecretAccessKey: connection.connectionType == .s3 ? password : nil
-        )
-
-        let windowId = windowManager.storeFileBrowserData(data)
-        logInfo("Stored window data with ID: \(windowId)", category: .ui)
-        pendingWindowId = windowId
+        tabManager.openTab(connection: connection, password: password)
         AnalyticsService.trackConnectionConnected(protocol: .init(from: connection.connectionType), success: true)
-        logInfo("Set pendingWindowId to: \(windowId)", category: .ui)
+        logInfo("Opened tab for connection: \(connection.name)", category: .ui)
     }
 
     func clearPendingWindow() {
-        pendingWindowId = nil
+        // No-op: tabs are opened directly via TabManager
     }
 
     func clearPendingTerminalWindow() {
