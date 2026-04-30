@@ -4,36 +4,6 @@
 
 <h1 align="center">macSCP</h1>
 
-<p align="center">
-  <strong>⚠️ Deprecated — see <a href="https://github.com/macnev2013/anySCP">AnySCP</a> for the actively maintained successor</strong>
-</p>
-
-<p align="center">
-  <a href="#features">Features</a> •
-  <a href="#screenshots">Screenshots</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#building">Building</a> •
-  <a href="#contributing">Contributing</a> •
-  <a href="#license">License</a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/macnev2013/macSCP/releases"><img src="https://img.shields.io/github/v/release/macnev2013/macSCP" alt="Release"/></a>
-  <a href="https://github.com/macnev2013/macSCP/releases"><img src="https://img.shields.io/github/downloads/macnev2013/macSCP/total" alt="Downloads"/></a>
-  <img src="https://img.shields.io/badge/macOS-15.0%2B-blue?logo=apple" alt="macOS 15.0+"/>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-CC0--1.0-green" alt="License CC0"/></a>
-  <a href="https://github.com/macnev2013/macSCP/stargazers"><img src="https://img.shields.io/github/stars/macnev2013/macSCP?style=social" alt="Stars"/></a>
-</p>
-
----
-
-<p align="center">
-  <img src="screens/screen-1.png" alt="macSCP Connection Manager" width="800"/>
-</p>
-<p align="center"><em>Manage SFTP servers, S3 buckets, and SSH terminals from one native macOS app.</em></p>
-
----
-
 ## Overview
 
 macSCP is a modern, native macOS application built with SwiftUI that provides seamless file management for SFTP servers, Amazon S3 storage, and integrated SSH terminal access. With its intuitive interface and powerful features, macSCP makes managing remote servers and cloud storage as easy as working with local files.
@@ -153,7 +123,7 @@ macSCP is a modern, native macOS application built with SwiftUI that provides se
 ### Prerequisites
 
 - Xcode 16.0 or later
-- macOS 15.0 SDK or later
+- macOS 14.0 SDK or later
 - Swift 5.9 or later
 
 ### Dependencies
