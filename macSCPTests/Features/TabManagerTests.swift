@@ -374,4 +374,130 @@ final class TabManagerTests: XCTestCase {
         XCTAssertEqual(sut.activeTab?.connectionName, "Right",
                        "After closing active middle tab, the next tab should become active")
     }
+
+    // MARK: - Move Tab (Reorder) Tests
+
+    func testMoveTab_basicReorder() {
+        // Given — 3 tabs: [A, B, C]
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        let conn3 = makeConnection(name: "C")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+
+        // When — move tab 0 to index 2: [A, B, C] → [B, C, A]
+        sut.moveTab(from: 0, to: 2)
+
+        // Then
+        XCTAssertEqual(sut.tabs.count, 3)
+        XCTAssertEqual(sut.tabs[0].connectionName, "B")
+        XCTAssertEqual(sut.tabs[1].connectionName, "C")
+        XCTAssertEqual(sut.tabs[2].connectionName, "A")
+    }
+
+    func testMoveTab_samePosition_noChange() {
+        // Given
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+
+        // When — move tab 1 to index 1 (same position)
+        sut.moveTab(from: 1, to: 1)
+
+        // Then — order unchanged
+        XCTAssertEqual(sut.tabs[0].connectionName, "A")
+        XCTAssertEqual(sut.tabs[1].connectionName, "B")
+    }
+
+    func testMoveTab_activeTab_movesWithTab() {
+        // Given — 3 tabs, active = tab 1 (B)
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        let conn3 = makeConnection(name: "C")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 1)
+
+        // When — move tab 1 (active B) to index 0: [A, B, C] → [B, A, C]
+        sut.moveTab(from: 1, to: 0)
+
+        // Then — active follows B to index 0
+        XCTAssertEqual(sut.tabs[0].connectionName, "B")
+        XCTAssertEqual(sut.tabs[1].connectionName, "A")
+        XCTAssertEqual(sut.tabs[2].connectionName, "C")
+        XCTAssertEqual(sut.activeTabIndex, 0)
+        XCTAssertEqual(sut.activeTab?.connectionName, "B")
+    }
+
+    func testMoveTab_beforeActive_shiftsActiveIndex() {
+        // Given — 3 tabs: [A, B, C], active = tab 1 (B)
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        let conn3 = makeConnection(name: "C")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 1)
+
+        // When — move tab 0 to index 1: [A, B, C] → [B, A, C]
+        // Remove A from 0: [B, C] (B now at index 0)
+        // Insert A at 1: [B, A, C] (B stays at 0)
+        // sourceIndex(0) < active(1) and destinationIndex(1) >= active(1)
+        // → active shifts left by 1: 1 → 0
+        sut.moveTab(from: 0, to: 1)
+
+        // Then
+        XCTAssertEqual(sut.tabs[0].connectionName, "B")
+        XCTAssertEqual(sut.tabs[1].connectionName, "A")
+        XCTAssertEqual(sut.tabs[2].connectionName, "C")
+        XCTAssertEqual(sut.activeTabIndex, 0, "Active should shift from 1 to 0")
+        XCTAssertEqual(sut.activeTab?.connectionName, "B")
+    }
+
+    func testMoveTab_afterActive_noShift() {
+        // Given — 3 tabs, active = tab 0 (A)
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        let conn3 = makeConnection(name: "C")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 0)
+
+        // When — move tab 2 to index 1: [A, B, C] → [A, C, B]
+        // Active is at 0, moved tab was after active, no shift needed
+        sut.moveTab(from: 2, to: 1)
+
+        // Then
+        XCTAssertEqual(sut.tabs[0].connectionName, "A")
+        XCTAssertEqual(sut.tabs[1].connectionName, "C")
+        XCTAssertEqual(sut.tabs[2].connectionName, "B")
+        XCTAssertEqual(sut.activeTabIndex, 0, "Active should remain at 0")
+    }
+
+    func testMoveTab_invalidIndices_noChange() {
+        // Given
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+
+        // When — out-of-range source index
+        sut.moveTab(from: 5, to: 0)
+        XCTAssertEqual(sut.tabs[0].connectionName, "A")
+        XCTAssertEqual(sut.tabs[1].connectionName, "B")
+
+        // When — out-of-range destination index
+        sut.moveTab(from: 0, to: 10)
+        XCTAssertEqual(sut.tabs[0].connectionName, "A")
+        XCTAssertEqual(sut.tabs[1].connectionName, "B")
+
+        // When — negative index
+        sut.moveTab(from: -1, to: 0)
+        XCTAssertEqual(sut.tabs[0].connectionName, "A")
+        XCTAssertEqual(sut.tabs[1].connectionName, "B")
+    }
 }

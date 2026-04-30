@@ -74,6 +74,27 @@ struct TabBarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .draggable(tab.id.uuidString) {
+            Text(tab.title)
+                .font(.system(size: 12))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let draggedUUIDString = items.first,
+                  let draggedId = UUID(uuidString: draggedUUIDString),
+                  let sourceIndex = tabManager.tabs.firstIndex(where: { $0.id == draggedId })
+            else { return false }
+            tabManager.moveTab(from: sourceIndex, to: index)
+            return true
+        } isTargeted: { isTargeted in
+            if isTargeted {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    hoveredTabId = tab.id
+                }
+            }
+        }
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 hoveredTabId = hovering ? tab.id : nil

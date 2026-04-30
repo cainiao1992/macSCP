@@ -77,6 +77,39 @@ import Foundation
         return tab
     }
 
+    // MARK: - Reorder
+
+    func moveTab(from sourceIndex: Int, to destinationIndex: Int) {
+        guard sourceIndex >= 0, sourceIndex < tabs.count,
+              destinationIndex >= 0, destinationIndex < tabs.count else {
+            logError("moveTab: source \(sourceIndex) or destination \(destinationIndex) out of bounds", category: .ui)
+            return
+        }
+        guard sourceIndex != destinationIndex else { return }
+
+        let tab = tabs.remove(at: sourceIndex)
+        tabs.insert(tab, at: destinationIndex)
+
+        // Adjust activeTabIndex to follow the active tab
+        if let currentActive = activeTabIndex {
+            if currentActive == sourceIndex {
+                // The moved tab was active — update to new position
+                activeTabIndex = destinationIndex
+            } else if sourceIndex < currentActive && destinationIndex >= currentActive {
+                // Active tab was between source and destination (source was before active,
+                // destination is at or after active) — active shifted left by 1
+                activeTabIndex = currentActive - 1
+            } else if sourceIndex > currentActive && destinationIndex <= currentActive {
+                // Active tab was between source and destination (source was after active,
+                // destination is at or before active) — active shifted right by 1
+                activeTabIndex = currentActive + 1
+            }
+            // else: active tab is outside the moved range — no change
+        }
+
+        logInfo("Moved tab from \(sourceIndex) to \(destinationIndex)", category: .ui)
+    }
+
     // MARK: - Close
 
     func closeTab(at index: Int) async {
