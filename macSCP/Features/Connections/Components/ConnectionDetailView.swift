@@ -46,6 +46,7 @@ struct ConnectionDetailView: View {
             ToolbarItem(placement: .automatic) {
                 Button(action: onEdit) {
                     Text("Edit")
+                .accessibilityIdentifier("editButton")
                 }
             }
         }
@@ -82,6 +83,7 @@ struct ConnectionDetailView: View {
                 label: "Files",
                 action: onConnect
             )
+            .accessibilityIdentifier("connectButton")
 
             // Terminal (SFTP only)
             if connection.connectionType == .sftp {
@@ -90,6 +92,7 @@ struct ConnectionDetailView: View {
                     label: "Terminal",
                     action: onOpenTerminal
                 )
+                .accessibilityIdentifier("terminalButton")
             }
 
             // Duplicate
@@ -106,6 +109,7 @@ struct ConnectionDetailView: View {
                 isDestructive: true,
                 action: onDelete
             )
+            .accessibilityIdentifier("deleteButton")
         }
         .frame(maxWidth: .infinity)
     }

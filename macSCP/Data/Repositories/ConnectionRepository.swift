@@ -11,8 +11,9 @@ import SwiftData
 final class ConnectionRepository: ConnectionRepositoryProtocol, @unchecked Sendable {
     private let dataStore: DataStore
 
-    init(dataStore: DataStore = .shared) {
-        self.dataStore = dataStore
+    @MainActor
+    init(dataStore: DataStore? = nil) {
+        self.dataStore = dataStore ?? DataStore.shared
     }
 
     @MainActor
@@ -194,6 +195,52 @@ final class ConnectionRepository: ConnectionRepositoryProtocol, @unchecked Senda
             throw error
         } catch {
             logError("Failed to move connection: \(error)", category: .database)
+            throw AppError.saveFailed("connection")
+        }
+    }
+
+    @MainActor
+    func toggleFavorite(id: UUID) async throws {
+        let context = dataStore.modelContext
+        let descriptor = FetchDescriptor<ConnectionEntity>(
+            predicate: #Predicate<ConnectionEntity> { $0.id == id }
+        )
+
+        do {
+            guard let entity = try context.fetch(descriptor).first else {
+                throw AppError.entityNotFound
+            }
+
+            entity.isFavorite.toggle()
+            try context.save()
+            logInfo("Toggled favorite for connection \(id)", category: .database)
+        } catch let error as AppError {
+            throw error
+        } catch {
+            logError("Failed to toggle favorite: \(error)", category: .database)
+            throw AppError.saveFailed("connection")
+        }
+    }
+
+    @MainActor
+    func updateLastUsedAt(id: UUID) async throws {
+        let context = dataStore.modelContext
+        let descriptor = FetchDescriptor<ConnectionEntity>(
+            predicate: #Predicate<ConnectionEntity> { $0.id == id }
+        )
+
+        do {
+            guard let entity = try context.fetch(descriptor).first else {
+                throw AppError.entityNotFound
+            }
+
+            entity.lastUsedAt = Date()
+            try context.save()
+            logInfo("Updated lastUsedAt for connection \(id)", category: .database)
+        } catch let error as AppError {
+            throw error
+        } catch {
+            logError("Failed to update lastUsedAt: \(error)", category: .database)
             throw AppError.saveFailed("connection")
         }
     }

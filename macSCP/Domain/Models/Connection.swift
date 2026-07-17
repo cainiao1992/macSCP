@@ -38,6 +38,10 @@ struct Connection: Identifiable, Hashable, Sendable, Codable, Transferable {
     var s3Bucket: String?
     var s3Endpoint: String?
 
+    // Favorite and usage tracking
+    var isFavorite: Bool
+    var lastUsedAt: Date?
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -56,7 +60,9 @@ struct Connection: Identifiable, Hashable, Sendable, Codable, Transferable {
         connectionType: ConnectionType = .sftp,
         s3Region: String? = nil,
         s3Bucket: String? = nil,
-        s3Endpoint: String? = nil
+        s3Endpoint: String? = nil,
+        isFavorite: Bool = false,
+        lastUsedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -76,6 +82,8 @@ struct Connection: Identifiable, Hashable, Sendable, Codable, Transferable {
         self.s3Region = s3Region
         self.s3Bucket = s3Bucket
         self.s3Endpoint = s3Endpoint
+        self.isFavorite = isFavorite
+        self.lastUsedAt = lastUsedAt
     }
 
     // MARK: - Computed Properties
@@ -124,6 +132,29 @@ struct Connection: Identifiable, Hashable, Sendable, Codable, Transferable {
 
 // MARK: - Validation
 extension Connection {
+    enum ConnectionField: CaseIterable {
+        case name, host, port, username, privateKeyPath, s3Bucket, s3AccessKey
+    }
+
+    func validationError(for field: ConnectionField) -> String? {
+        switch field {
+        case .name:
+            return name.isBlank ? "Name is required" : nil
+        case .host:
+            return (isSFTPConnection && host.isBlank) ? "Host is required" : nil
+        case .port:
+            return (isSFTPConnection && (port <= 0 || port > 65535)) ? "Port must be between 1 and 65535" : nil
+        case .username:
+            return username.isBlank ? (isS3Connection ? "Access Key ID is required" : "Username is required") : nil
+        case .privateKeyPath:
+            return (isSFTPConnection && authMethod == .privateKey && (privateKeyPath?.isBlank ?? true)) ? "Private key path is required for key authentication" : nil
+        case .s3Bucket:
+            return (isS3Connection && (s3Bucket?.isBlank ?? true)) ? "Bucket name is required" : nil
+        case .s3AccessKey:
+            return (isS3Connection && username.isBlank) ? "Access Key ID is required" : nil
+        }
+    }
+
     var isValid: Bool {
         switch connectionType {
         case .sftp:

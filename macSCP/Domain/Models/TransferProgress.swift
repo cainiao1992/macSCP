@@ -80,6 +80,49 @@ struct TransferProgress: Identifiable, Sendable {
     var totalSizeText: String {
         ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
     }
+
+    /// Time elapsed since transfer started
+    var elapsedTime: TimeInterval {
+        Date().timeIntervalSince(startTime)
+    }
+
+    /// Transfer speed in bytes per second
+    var transferSpeed: Double {
+        guard elapsedTime > 0.5 else { return 0 }
+        return Double(bytesTransferred) / elapsedTime
+    }
+
+    /// Formatted transfer speed (e.g., "2.5 MB/s")
+    var displaySpeed: String {
+        let speed = transferSpeed
+        guard speed > 0 else { return "-- /s" }
+        return "\(ByteCountFormatter.string(fromByteCount: Int64(speed), countStyle: .file))/s"
+    }
+
+    /// Estimated time remaining in seconds
+    var estimatedTimeRemaining: TimeInterval? {
+        let speed = transferSpeed
+        guard speed > 0 else { return nil }
+        let remainingBytes = totalBytes - bytesTransferred
+        guard remainingBytes > 0 else { return 0 }
+        return Double(remainingBytes) / speed
+    }
+
+    /// Formatted estimated time remaining (e.g., "~30s remaining" or "~5 min remaining")
+    var displayTimeRemaining: String? {
+        guard let time = estimatedTimeRemaining else { return nil }
+        guard time > 0 else { return "Almost done" }
+        if time < 60 {
+            return "~\(Int(ceil(time)))s remaining"
+        } else if time < 3600 {
+            let minutes = Int(ceil(time / 60))
+            return "~\(minutes) min remaining"
+        } else {
+            let hours = Int(time / 3600)
+            let minutes = Int((time.truncatingRemainder(dividingBy: 3600)) / 60)
+            return "~\(hours)h \(minutes)m remaining"
+        }
+    }
 }
 
 /// Status of a transfer operation

@@ -20,16 +20,41 @@ struct SidebarView: View {
             NavigationLink(value: SidebarSelection.allConnections) {
                 Label {
                     Text("All Connections")
+                        .accessibilityIdentifier("allConnectionsRow")
                 } icon: {
                     Image(systemName: "server.rack")
                         .foregroundStyle(Color.accentColor)
                 }
             }
+            .accessibilityIdentifier("allConnectionsRow")
             .dropDestination(for: Connection.self) { connections, _ in
                 for connection in connections {
                     Task { await viewModel.moveConnection(connection, to: nil) }
                 }
                 return true
+            }
+
+            // Favorites Section
+            if !viewModel.favoriteConnections.isEmpty {
+                Section {
+                    ForEach(viewModel.favoriteConnections) { connection in
+                        HStack {
+                            Image(systemName: "star.fill")
+                                .foregroundStyle(.yellow)
+                            Text(connection.name)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            viewModel.connectToServer(connection)
+                        }
+                        .onTapGesture {
+                            viewModel.selectedConnectionId = connection.id
+                        }
+                        .accessibilityIdentifier("favoriteConnection_\(connection.name)")
+                    }
+                } header: {
+                    Label("Favorites", systemImage: "star.fill")
+                }
             }
 
             // Folders Section
@@ -71,6 +96,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .accessibilityIdentifier("sidebar")
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button {

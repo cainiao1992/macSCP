@@ -54,13 +54,16 @@ struct TerminalWindow: View {
         }
 
         let container = DependencyContainer.shared
-        let session = container.makeTerminalSession()
+        let session = container.makeTerminalSession(connectionData: data)
 
         viewModel = container.makeTerminalViewModel(
             connectionName: data.connectionName,
             session: session,
             connectionData: data
         )
+
+        // Clean up sensitive data from WindowManager after use
+        windowManager.removeTerminalData(for: windowId)
     }
 }
 

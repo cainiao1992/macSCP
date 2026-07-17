@@ -119,6 +119,6 @@ struct SearchReplaceBar: View {
         filePath: "/test.txt",
         fileName: "test.txt",
         initialContent: "Hello, World! Hello again!",
-        fileRepository: FileRepository(sftpSession: SFTPSession())
+        fileRepository: FileRepository(sftpSession: SystemSFTPSession())
     ))
 }

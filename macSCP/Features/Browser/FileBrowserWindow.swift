@@ -80,7 +80,7 @@ struct FileBrowserWindow: View {
             )
         } else {
             // SFTP connection
-            let sftpSession = container.makeSFTPSession()
+            let sftpSession = container.makeSFTPSession(privateKeyPath: data.privateKeyPath)
             viewModel = container.makeFileBrowserViewModel(
                 connection: connection,
                 sftpSession: sftpSession,

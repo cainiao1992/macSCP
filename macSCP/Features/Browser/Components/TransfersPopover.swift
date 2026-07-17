@@ -144,7 +144,17 @@ struct TransferItemView: View {
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
 
+                        if let timeRemaining = transfer.displayTimeRemaining {
+                            Text(timeRemaining)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+
                         Spacer()
+
+                        Text(transfer.displaySpeed)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.secondary)
 
                         Text("\(transfer.percentCompleted)%")
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -293,7 +303,7 @@ struct TransfersToolbarButton: View {
     TransfersPopover(
         viewModel: DependencyContainer.shared.makeFileBrowserViewModel(
             connection: Connection(name: "Test", host: "localhost", username: "user"),
-            sftpSession: SFTPSession(),
+            sftpSession: SystemSFTPSession(),
             password: "test"
         )
     )

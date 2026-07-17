@@ -18,9 +18,9 @@
         </dict>
     </array>
     <key>SUFeedURL</key>
-    <string>https://raw.githubusercontent.com/macnev2013/macSCP/main/appcast.xml</string>
+    <string>https://raw.githubusercontent.com/cainiao1992/macSCP/main/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>fkQ0x2i5js+9C0o32jJlZOUhNV3zCAC74nKKSUu1cUI=</string>
+    <string>3yG985bybdFYJtqkL1iTPYoJk4+2mAa42dxgRf4izPE=</string>
     <key>SUEnableAutomaticChecks</key>
     <true/>
     <key>SUScheduledCheckInterval</key>

@@ -32,6 +32,9 @@ struct ConnectionFormSheet: View {
     let folders: [Folder]
     let onSave: (Connection, String?) -> Void
     let onCancel: () -> Void
+    let onTestConnection: ((Connection, String?) -> Void)?
+    var testConnectionState: TestConnectionState = .idle
+    var onResetTestState: (() -> Void)?
 
     @State private var selectedType: ConnectionType = .sftp
 
@@ -49,6 +52,7 @@ struct ConnectionFormSheet: View {
     @State private var selectedFolderId: UUID?
     @State private var tags: [String] = []
     @State private var newTag: String = ""
+    @State private var touched: Set<Connection.ConnectionField> = []
 
     // S3-specific fields
     @State private var s3Region: String = "us-east-1"
@@ -61,13 +65,19 @@ struct ConnectionFormSheet: View {
         savedPassword: String? = nil,
         folders: [Folder] = [],
         onSave: @escaping (Connection, String?) -> Void,
-        onCancel: @escaping () -> Void
+        onCancel: @escaping () -> Void,
+        onTestConnection: ((Connection, String?) -> Void)? = nil,
+        testConnectionState: TestConnectionState = .idle,
+        onResetTestState: (() -> Void)? = nil
     ) {
         self.mode = mode
         self.savedPassword = savedPassword
         self.folders = folders
         self.onSave = onSave
         self.onCancel = onCancel
+        self.onTestConnection = onTestConnection
+        self.testConnectionState = testConnectionState
+        self.onResetTestState = onResetTestState
     }
 
     private var isEditMode: Bool {
@@ -100,6 +110,7 @@ struct ConnectionFormSheet: View {
                             if newType == .sftp {
                                 port = "22"
                             }
+                            onResetTestState?()
                         }
                     }
                 }
@@ -107,15 +118,44 @@ struct ConnectionFormSheet: View {
                 // Connection details based on type
                 Section("Connection") {
                     TextField("Name", text: $name)
+                        .accessibilityIdentifier("nameField")
+                        .onChange(of: name) { _, _ in touched.insert(.name) }
+                    if touched.contains(.name), let msg = fieldError(.name) {
+                        Text(msg).font(.caption).foregroundStyle(.red)
+                    }
 
                     if selectedType == .sftp {
                         TextField("Host", text: $host)
+                            .accessibilityIdentifier("hostField")
+                            .onChange(of: host) { _, _ in touched.insert(.host) }
+                        if touched.contains(.host), let msg = fieldError(.host) {
+                            Text(msg).font(.caption).foregroundStyle(.red)
+                        }
                         TextField("Port", text: $port)
+                            .accessibilityIdentifier("portField")
+                            .onChange(of: port) { _, _ in touched.insert(.port) }
+                        if touched.contains(.port), let msg = fieldError(.port) {
+                            Text(msg).font(.caption).foregroundStyle(.red)
+                        }
                         TextField("Username", text: $username)
+                            .accessibilityIdentifier("usernameField")
+                            .onChange(of: username) { _, _ in touched.insert(.username) }
+                        if touched.contains(.username), let msg = fieldError(.username) {
+                            Text(msg).font(.caption).foregroundStyle(.red)
+                        }
                     } else if selectedType == .s3 {
                         TextField("Access Key ID", text: $username)
+                            .accessibilityIdentifier("usernameField")
+                            .onChange(of: username) { _, _ in touched.insert(.s3AccessKey) }
+                        if touched.contains(.s3AccessKey), let msg = fieldError(.s3AccessKey) {
+                            Text(msg).font(.caption).foregroundStyle(.red)
+                        }
                         SecureField("Secret Access Key", text: $s3SecretAccessKey)
                         TextField("Bucket", text: $s3Bucket)
+                            .onChange(of: s3Bucket) { _, _ in touched.insert(.s3Bucket) }
+                        if touched.contains(.s3Bucket), let msg = fieldError(.s3Bucket) {
+                            Text(msg).font(.caption).foregroundStyle(.red)
+                        }
                         TextField("Region", text: $s3Region)
                             .textContentType(.none)
                         TextField("Custom Endpoint (optional)", text: $s3Endpoint)
@@ -138,9 +178,13 @@ struct ConnectionFormSheet: View {
                         } else {
                             HStack {
                                 TextField("Private Key Path", text: $privateKeyPath)
+                                    .onChange(of: privateKeyPath) { _, _ in touched.insert(.privateKeyPath) }
                                 Button("Browse") {
                                     browseForKey()
                                 }
+                            }
+                            if touched.contains(.privateKeyPath), let msg = fieldError(.privateKeyPath) {
+                                Text(msg).font(.caption).foregroundStyle(.red)
                             }
                         }
                     }
@@ -202,6 +246,9 @@ struct ConnectionFormSheet: View {
 
             Divider()
 
+            // Test Connection result banner
+            testResultBanner
+
             // Footer
             HStack {
                 Spacer()
@@ -211,6 +258,15 @@ struct ConnectionFormSheet: View {
                 }
                 .keyboardShortcut(.cancelAction)
                 .buttonStyle(.bordered)
+                .accessibilityIdentifier("cancelButton")
+
+                Button("Test Connection") {
+                    testConnection()
+                }
+                .keyboardShortcut("t", modifiers: .command)
+                .buttonStyle(.bordered)
+                .disabled(!isValid || testConnectionState == .testing)
+                .accessibilityIdentifier("testConnectionButton")
 
                 Button(mode.saveButtonTitle) {
                     save()
@@ -218,16 +274,88 @@ struct ConnectionFormSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
                 .disabled(!isValid)
+                .accessibilityIdentifier("saveButton")
             }
             .padding()
         }
-        .frame(width: 500, height: 580)
+        .frame(width: 500, height: 640)
         .onAppear {
             loadExistingData()
         }
     }
 
+    // MARK: - Test Connection
+
+    @ViewBuilder
+    private var testResultBanner: some View {
+        switch testConnectionState {
+        case .idle:
+            EmptyView()
+        case .testing:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Testing connection...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 6)
+        case .success:
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text("Connection successful")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 6)
+        case .failure(let msg):
+            HStack(spacing: 8) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.red)
+                Text(msg)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 6)
+        }
+    }
+
+    private func testConnection() {
+        guard let onTestConnection else { return }
+        let conn = buildCurrentConnection()
+        let pw: String?
+        if selectedType == .s3 {
+            pw = s3SecretAccessKey.isEmpty ? nil : s3SecretAccessKey
+        } else {
+            pw = password.isEmpty ? nil : password
+        }
+        onTestConnection(conn, pw)
+    }
+
     // MARK: - Validation
+
+    private func fieldError(_ field: Connection.ConnectionField) -> String? {
+        let portNumber = Int(port) ?? 0
+        let conn = Connection(
+            name: name,
+            host: host,
+            port: portNumber,
+            username: username,
+            authMethod: authMethod,
+            privateKeyPath: authMethod == .privateKey ? privateKeyPath : nil,
+            connectionType: selectedType,
+            s3Bucket: s3Bucket.isEmpty ? nil : s3Bucket
+        )
+        return conn.validationError(for: field)
+    }
 
     private var isValid: Bool {
         switch selectedType {
@@ -276,12 +404,11 @@ struct ConnectionFormSheet: View {
 
     // MARK: - Save
 
-    private func save() {
+    private func buildCurrentConnection() -> Connection {
         let portNumber = Int(port) ?? 22
 
-        let connection: Connection
         if case .edit(let existing) = mode {
-            connection = Connection(
+            return Connection(
                 id: existing.id,
                 name: name.trimmed,
                 host: selectedType == .sftp ? host.trimmed : "",
@@ -302,7 +429,7 @@ struct ConnectionFormSheet: View {
                 s3Endpoint: selectedType == .s3 && !s3Endpoint.trimmed.isEmpty ? s3Endpoint.trimmed : nil
             )
         } else {
-            connection = Connection(
+            return Connection(
                 name: name.trimmed,
                 host: selectedType == .sftp ? host.trimmed : "",
                 port: portNumber,
@@ -320,6 +447,11 @@ struct ConnectionFormSheet: View {
                 s3Endpoint: selectedType == .s3 && !s3Endpoint.trimmed.isEmpty ? s3Endpoint.trimmed : nil
             )
         }
+    }
+
+    private func save() {
+        touched = Set(Connection.ConnectionField.allCases)
+        let connection = buildCurrentConnection()
 
         let passwordToSave: String?
         if selectedType == .s3 {

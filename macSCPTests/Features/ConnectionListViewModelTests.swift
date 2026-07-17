@@ -23,11 +23,18 @@ final class ConnectionListViewModelTests: XCTestCase {
         mockKeychainService = MockKeychainService()
         mockWindowManager = WindowManager.shared
 
+        await mockConnectionRepository.reset()
+        await mockFolderRepository.reset()
+        await mockKeychainService.reset()
+
         sut = ConnectionListViewModel(
             connectionRepository: mockConnectionRepository,
             folderRepository: mockFolderRepository,
             keychainService: mockKeychainService,
-            windowManager: mockWindowManager
+            windowManager: mockWindowManager,
+            tabManager: TabManager(viewModelFactory: { _, _ in
+                fatalError("TabManager factory called in test — not expected")
+            })
         )
     }
 
@@ -97,6 +104,111 @@ final class ConnectionListViewModelTests: XCTestCase {
         // Then
         XCTAssertTrue(mockConnectionRepository.deleteCalled)
         XCTAssertEqual(mockConnectionRepository.lastDeletedId, connection.id)
+    }
+
+    // MARK: - Favorite Tests
+
+    func testToggleFavorite_Success() async {
+        // Given
+        let connection = Connection(name: "Test", host: "test.com", username: "user")
+        mockConnectionRepository.mockConnections = [connection]
+        await sut.loadData()
+
+        // When
+        await sut.toggleFavorite(connection)
+
+        // Then
+        XCTAssertTrue(mockConnectionRepository.toggleFavoriteCalled)
+        XCTAssertEqual(mockConnectionRepository.lastToggledFavoriteId, connection.id)
+        XCTAssertEqual(sut.connections.first?.isFavorite, true)
+    }
+
+    func testFavoriteConnections_Filter() async {
+        // Given
+        let favConnection = Connection(name: "Favorite", host: "fav.com", username: "user", isFavorite: true)
+        let normalConnection = Connection(name: "Normal", host: "normal.com", username: "user")
+        mockConnectionRepository.mockConnections = [favConnection, normalConnection]
+        await sut.loadData()
+
+        // Then
+        XCTAssertEqual(sut.favoriteConnections.count, 1)
+        XCTAssertEqual(sut.favoriteConnections.first?.name, "Favorite")
+    }
+
+    // MARK: - PASS-02 Tests
+
+    func testAttemptConnect_AuthFailure_KeepsSheetOpen_SetsConnectionError() async {
+        // Given
+        let mockSession = MockSFTPSession()
+        await mockSession.setMockError(AppError.authenticationFailed)
+
+        let connection = Connection(name: "Test", host: "test.com", username: "user")
+        mockConnectionRepository.mockConnections = [connection]
+
+        let testVM = ConnectionListViewModel(
+            connectionRepository: mockConnectionRepository,
+            folderRepository: mockFolderRepository,
+            keychainService: mockKeychainService,
+            windowManager: mockWindowManager,
+            tabManager: TabManager(viewModelFactory: { _, _ in
+                fatalError("Should not open tab on auth failure")
+            }),
+            makeSFTPSession: { mockSession }
+        )
+
+        await testVM.loadData()
+        testVM.isShowingPasswordPrompt = true
+        testVM.connectionToConnect = connection
+
+        // When
+        await testVM.attemptConnect(connection, password: "wrong")
+
+        // Then
+        XCTAssertTrue(testVM.isShowingPasswordPrompt)
+        XCTAssertNotNil(testVM.connectionError)
+    }
+
+    func testAttemptConnect_Success_OpensTab_UpdatesLastUsedAt_DismissesSheet() async {
+        // Given
+        let mockSession = MockSFTPSession()
+
+        let connection = Connection(name: "Test", host: "test.com", username: "user")
+        mockConnectionRepository.mockConnections = [connection]
+
+        var openedConnections: [Connection] = []
+        let recordingTabManager = TabManager(viewModelFactory: { conn, password in
+            openedConnections.append(conn)
+            return FileBrowserViewModel(
+                connection: conn,
+                sftpSession: MockSFTPSession(),
+                fileRepository: MockFileRepository(),
+                clipboardService: ClipboardService.shared,
+                password: password
+            )
+        })
+
+        let testVM = ConnectionListViewModel(
+            connectionRepository: mockConnectionRepository,
+            folderRepository: mockFolderRepository,
+            keychainService: mockKeychainService,
+            windowManager: mockWindowManager,
+            tabManager: recordingTabManager,
+            makeSFTPSession: { mockSession }
+        )
+
+        await testVM.loadData()
+        testVM.isShowingPasswordPrompt = true
+        testVM.connectionToConnect = connection
+
+        // When
+        await testVM.attemptConnect(connection, password: "right")
+
+        // Then
+        XCTAssertFalse(testVM.isShowingPasswordPrompt)
+        XCTAssertNil(testVM.connectionError)
+        XCTAssertTrue(mockConnectionRepository.updateLastUsedAtCalled)
+        XCTAssertEqual(openedConnections.count, 1)
+        XCTAssertEqual(openedConnections.first?.id, connection.id)
     }
 
     // MARK: - Folder Tests
@@ -177,5 +289,71 @@ final class ConnectionListViewModelTests: XCTestCase {
         // Then
         XCTAssertEqual(sut.connectionCount(for: folder.id), 2)
         XCTAssertEqual(sut.totalConnectionCount, 3)
+    }
+
+    // MARK: - Test Connection Tests
+
+    func testTestConnection_Success() async {
+        // Given
+        let mockSession = MockSFTPSession()
+        let connection = Connection(name: "Test", host: "test.com", username: "user")
+
+        let testVM = ConnectionListViewModel(
+            connectionRepository: mockConnectionRepository,
+            folderRepository: mockFolderRepository,
+            keychainService: mockKeychainService,
+            windowManager: mockWindowManager,
+            tabManager: TabManager(viewModelFactory: { _, _ in fatalError("not expected") }),
+            makeSFTPSession: { mockSession }
+        )
+
+        // When
+        await testVM.testConnection(connection, password: "password")
+
+        // Then
+        XCTAssertEqual(testVM.testConnectionState, .success)
+    }
+
+    func testTestConnection_Failure() async {
+        // Given
+        let mockSession = MockSFTPSession()
+        await mockSession.setMockError(AppError.authenticationFailed)
+        let connection = Connection(name: "Test", host: "test.com", username: "user")
+
+        let testVM = ConnectionListViewModel(
+            connectionRepository: mockConnectionRepository,
+            folderRepository: mockFolderRepository,
+            keychainService: mockKeychainService,
+            windowManager: mockWindowManager,
+            tabManager: TabManager(viewModelFactory: { _, _ in fatalError("not expected") }),
+            makeSFTPSession: { mockSession }
+        )
+
+        // When
+        await testVM.testConnection(connection, password: "wrong")
+
+        // Then
+        if case .failure(let msg) = testVM.testConnectionState {
+            XCTAssertTrue(msg.contains("Authentication") || msg.contains("failed") || !msg.isEmpty)
+        } else {
+            XCTFail("Expected failure state")
+        }
+    }
+
+    func testResetTestConnectionState() async {
+        // Given
+        let testVM = ConnectionListViewModel(
+            connectionRepository: mockConnectionRepository,
+            folderRepository: mockFolderRepository,
+            keychainService: mockKeychainService,
+            windowManager: mockWindowManager,
+            tabManager: TabManager(viewModelFactory: { _, _ in fatalError("not expected") })
+        )
+
+        // When
+        testVM.resetTestConnectionState()
+
+        // Then
+        XCTAssertEqual(testVM.testConnectionState, .idle)
     }
 }

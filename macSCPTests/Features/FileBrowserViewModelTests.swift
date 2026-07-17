@@ -13,7 +13,7 @@ final class FileBrowserViewModelTests: XCTestCase {
     var sut: FileBrowserViewModel!
     var mockSFTPSession: MockSFTPSession!
     var mockFileRepository: MockFileRepository!
-    var mockClipboardService: ClipboardService!
+    var mockClipboardService: MockClipboardService!
 
     let testConnection = Connection(
         name: "Test Server",
@@ -25,7 +25,11 @@ final class FileBrowserViewModelTests: XCTestCase {
         try await super.setUp()
         mockSFTPSession = MockSFTPSession()
         mockFileRepository = MockFileRepository()
-        mockClipboardService = ClipboardService.shared
+        mockClipboardService = MockClipboardService()
+
+        await mockSFTPSession.reset()
+        await mockFileRepository.reset()
+        await mockClipboardService.reset()
 
         sut = FileBrowserViewModel(
             connection: testConnection,
@@ -37,6 +41,7 @@ final class FileBrowserViewModelTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        await mockClipboardService.reset()
         sut = nil
         mockSFTPSession = nil
         mockFileRepository = nil
@@ -63,19 +68,15 @@ final class FileBrowserViewModelTests: XCTestCase {
 
     func testConnect_Error() async {
         // Given
-        await MainActor.run {
-            Task {
-                await mockSFTPSession.reset()
-            }
-        }
-        // Note: Setting error on actor requires proper handling
-        // For this test, we'll verify the error state
+        await mockSFTPSession.reset()
+        await mockSFTPSession.setMockError(AppError.connectionFailed("Host unreachable"))
 
         // When
-        // await sut.connect()
+        await sut.connect()
 
-        // Then - state management tests
+        // Then
         XCTAssertFalse(sut.isConnected)
+        XCTAssertTrue(sut.state.isError)
     }
 
     func testDisconnect() async {
@@ -270,5 +271,43 @@ final class FileBrowserViewModelTests: XCTestCase {
         // Then
         XCTAssertEqual(sut.sortedFiles.count, 1)
         XCTAssertFalse(sut.sortedFiles.first?.isHidden ?? true)
+    }
+
+    // MARK: - Host Key Mismatch Tests
+
+    func testConnect_HostKeyMismatch_ShowsAlert() async {
+        await mockSFTPSession.setMockError(AppError.hostKeyMismatch(host: "test.example.com", port: 22))
+
+        await sut.connect()
+
+        XCTAssertTrue(sut.isShowingHostKeyMismatchAlert)
+        XCTAssertFalse(sut.isConnected)
+        if case .idle = sut.state {
+        } else {
+            XCTFail("Expected .idle state, got \(sut.state)")
+        }
+    }
+
+    func testDisconnectAfterHostKeyMismatch_ResetsState() async {
+        await mockSFTPSession.setMockError(AppError.hostKeyMismatch(host: "test.example.com", port: 22))
+        await sut.connect()
+        XCTAssertTrue(sut.isShowingHostKeyMismatchAlert)
+
+        sut.disconnectAfterHostKeyMismatch()
+
+        XCTAssertFalse(sut.isShowingHostKeyMismatchAlert)
+        if case .idle = sut.state {
+        } else {
+            XCTFail("Expected .idle state, got \(sut.state)")
+        }
+    }
+
+    func testConnect_NonHostKeyError_DoesNotShowAlert() async {
+        await mockSFTPSession.setMockError(AppError.connectionFailed("timeout"))
+
+        await sut.connect()
+
+        XCTAssertFalse(sut.isShowingHostKeyMismatchAlert)
+        XCTAssertTrue(sut.state.isError)
     }
 }

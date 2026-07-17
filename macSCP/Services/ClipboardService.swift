@@ -9,7 +9,7 @@ import Foundation
 
 @MainActor
 @Observable
-final class ClipboardService {
+final class ClipboardService: ClipboardServiceProtocol {
     static let shared = ClipboardService()
 
     private(set) var state = ClipboardState()

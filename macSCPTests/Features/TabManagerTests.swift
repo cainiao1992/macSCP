@@ -1,0 +1,625 @@
+//
+//  TabManagerTests.swift
+//  macSCPTests
+//
+//  Unit tests for TabManager
+//
+
+import XCTest
+@testable import macSCP
+
+@MainActor
+final class TabManagerTests: XCTestCase {
+    var sut: TabManager!
+    var capturedSessions: [MockSFTPSession] = []
+
+    override func setUp() async throws {
+        try await super.setUp()
+        capturedSessions = []
+        sut = TabManager(viewModelFactory: makeViewModel)
+    }
+
+    override func tearDown() async throws {
+        sut = nil
+        capturedSessions = []
+        try await super.tearDown()
+    }
+
+    // MARK: - Helpers
+
+    private func makeViewModel(connection: Connection, password: String) -> FileBrowserViewModel {
+        let session = MockSFTPSession()
+        capturedSessions.append(session)
+        let repository = MockFileRepository()
+        let clipboard = MockClipboardService()
+        return FileBrowserViewModel(
+            connection: connection,
+            sftpSession: session,
+            fileRepository: repository,
+            clipboardService: clipboard,
+            password: password
+        )
+    }
+
+    private func makeConnection(name: String = "Test", host: String = "test.com") -> Connection {
+        Connection(name: name, host: host, username: "user")
+    }
+
+    // MARK: - Open Tab Tests
+
+    func testOpenTab_createsNewTab() {
+        // Given
+        let connection = makeConnection()
+
+        // When
+        sut.openTab(connection: connection, password: "pass")
+
+        // Then
+        XCTAssertEqual(sut.tabs.count, 1)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+        XCTAssertEqual(sut.tabs.first?.connectionName, "Test")
+        XCTAssertTrue(sut.hasTabs)
+    }
+
+    func testOpenTab_duplicateConnection_switchesToExisting() {
+        // Given
+        let connection = makeConnection()
+        sut.openTab(connection: connection, password: "pass")
+
+        // When
+        sut.openTab(connection: connection, password: "pass")
+
+        // Then
+        XCTAssertEqual(sut.tabs.count, 1)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+        XCTAssertEqual(capturedSessions.count, 1, "Should only create one session (no duplicate)")
+    }
+
+    func testOpenTab_multipleConnections() {
+        // Given / When
+        let conn1 = makeConnection(name: "Server 1", host: "host1.com")
+        let conn2 = makeConnection(name: "Server 2", host: "host2.com")
+        let conn3 = makeConnection(name: "Server 3", host: "host3.com")
+
+        sut.openTab(connection: conn1, password: "pass1")
+        sut.openTab(connection: conn2, password: "pass2")
+        sut.openTab(connection: conn3, password: "pass3")
+
+        // Then
+        XCTAssertEqual(sut.tabs.count, 3)
+        XCTAssertEqual(sut.activeTabIndex, 2)
+        XCTAssertEqual(sut.tabs[0].connectionName, "Server 1")
+        XCTAssertEqual(sut.tabs[1].connectionName, "Server 2")
+        XCTAssertEqual(sut.tabs[2].connectionName, "Server 3")
+    }
+
+    // MARK: - Switch Tab Tests
+
+    func testSwitchToTab_updatesActiveIndex() {
+        // Given
+        let conn1 = makeConnection(name: "S1")
+        let conn2 = makeConnection(name: "S2")
+        let conn3 = makeConnection(name: "S3")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+
+        // When
+        sut.switchToTab(at: 1)
+
+        // Then
+        XCTAssertEqual(sut.activeTabIndex, 1)
+        XCTAssertEqual(sut.activeTab?.connectionName, "S2")
+    }
+
+    func testSwitchToTab_outOfBounds_noChange() {
+        // Given
+        let conn = makeConnection()
+        sut.openTab(connection: conn, password: "p")
+        sut.switchToTab(at: 0)
+
+        // When
+        sut.switchToTab(at: 5)
+
+        // Then
+        XCTAssertEqual(sut.activeTabIndex, 0)
+    }
+
+    func testSwitchToTab_byConnectionId() {
+        // Given
+        let conn1 = makeConnection(name: "S1")
+        let conn2 = makeConnection(name: "S2")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+
+        // When
+        let found = sut.switchToTab(for: conn1.id)
+
+        // Then
+        XCTAssertTrue(found)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+        XCTAssertEqual(sut.activeTab?.connectionName, "S1")
+    }
+
+    func testSwitchToTab_byConnectionId_notFound() {
+        // Given
+        let conn = makeConnection()
+        sut.openTab(connection: conn, password: "p")
+
+        // When
+        let found = sut.switchToTab(for: UUID())
+
+        // Then
+        XCTAssertFalse(found)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+    }
+
+    // MARK: - Close Tab Tests
+
+    func testCloseTab_middleTab_adjustsIndex() async {
+        // Given — 3 tabs, active = 2
+        let conn1 = makeConnection(name: "S1")
+        let conn2 = makeConnection(name: "S2")
+        let conn3 = makeConnection(name: "S3")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 2)
+
+        // When — close tab at index 1 (middle)
+        await sut.closeTab(at: 1)
+
+        // Then — active shifts from 2 → 1 (C is now at index 1)
+        XCTAssertEqual(sut.tabs.count, 2)
+        XCTAssertEqual(sut.activeTabIndex, 1)
+        XCTAssertEqual(sut.activeTab?.connectionName, "S3")
+    }
+
+    func testCloseTab_activeTab_switchesToAdjacent() async {
+        // Given — 3 tabs, active = 1
+        let conn1 = makeConnection(name: "S1")
+        let conn2 = makeConnection(name: "S2")
+        let conn3 = makeConnection(name: "S3")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 1)
+
+        // When — close active tab (index 1)
+        await sut.closeTab(at: 1)
+
+        // Then — active stays at 1, which now points to S3 (next tab)
+        XCTAssertEqual(sut.tabs.count, 2)
+        XCTAssertEqual(sut.activeTabIndex, 1)
+        XCTAssertEqual(sut.activeTab?.connectionName, "S3")
+    }
+
+    func testCloseTab_activeLastTab_switchesToPrevious() async {
+        // Given — 2 tabs, active = 1 (last)
+        let conn1 = makeConnection(name: "S1")
+        let conn2 = makeConnection(name: "S2")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.switchToTab(at: 1)
+
+        // When — close active tab (last)
+        await sut.closeTab(at: 1)
+
+        // Then — active moves to previous
+        XCTAssertEqual(sut.tabs.count, 1)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+        XCTAssertEqual(sut.activeTab?.connectionName, "S1")
+    }
+
+    func testCloseTab_lastTab_clearsActive() async {
+        // Given
+        let conn = makeConnection()
+        sut.openTab(connection: conn, password: "p")
+        XCTAssertNotNil(sut.activeTabIndex)
+
+        // When
+        await sut.closeTab(at: 0)
+
+        // Then
+        XCTAssertEqual(sut.tabs.count, 0)
+        XCTAssertNil(sut.activeTabIndex)
+        XCTAssertNil(sut.activeTab)
+        XCTAssertFalse(sut.hasTabs)
+    }
+
+    func testCloseTab_disconnectsSession() async {
+        // Given
+        let conn = makeConnection()
+        sut.openTab(connection: conn, password: "p")
+        let session = capturedSessions[0]
+
+        // When
+        await sut.closeTab(at: 0)
+
+        // Then
+        let wasCalled = await session.disconnectCalled
+        XCTAssertTrue(wasCalled)
+    }
+
+    func testCloseAllTabs_disconnectsAll() async {
+        // Given
+        let conn1 = makeConnection(name: "S1")
+        let conn2 = makeConnection(name: "S2")
+        let conn3 = makeConnection(name: "S3")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+
+        // When
+        await sut.closeAllTabs()
+
+        // Then
+        XCTAssertEqual(sut.tabs.count, 0)
+        XCTAssertNil(sut.activeTabIndex)
+        for session in capturedSessions {
+            let wasCalled = await session.disconnectCalled
+            XCTAssertTrue(wasCalled)
+        }
+    }
+
+    // MARK: - Concurrent Close Tests (Race Condition Regression)
+
+    func testCloseTab_concurrentCloseSameIndex_noCrash() async {
+        // Given — 3 tabs, simulates rapid double-click on close button
+        let conn1 = makeConnection(name: "S1")
+        let conn2 = makeConnection(name: "S2")
+        let conn3 = makeConnection(name: "S3")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 2)
+        XCTAssertEqual(sut.tabs.count, 3)
+
+        // When — two concurrent closeTab calls on the same index
+        // Before the fix this would crash with "Index out of range"
+        // because both pass the bounds check, then both try tabs.remove(at: 2)
+        async let close1: Void = sut.closeTab(at: 2)
+        async let close2: Void = sut.closeTab(at: 2)
+        _ = await (close1, close2)
+
+        // Then — exactly one tab removed, no crash
+        XCTAssertEqual(sut.tabs.count, 2)
+        XCTAssertEqual(sut.tabs[0].connectionName, "S1")
+        XCTAssertEqual(sut.tabs[1].connectionName, "S2")
+    }
+
+    func testCloseTab_alreadyClosedIndex_returnsGracefully() async {
+        // Given — 3 tabs
+        let conn1 = makeConnection(name: "S1")
+        let conn2 = makeConnection(name: "S2")
+        let conn3 = makeConnection(name: "S3")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+
+        // When — close tab at index 2, then try to close index 2 again
+        await sut.closeTab(at: 2)
+        XCTAssertEqual(sut.tabs.count, 2)
+
+        // This should NOT crash — index 2 is now out of bounds
+        await sut.closeTab(at: 2)
+
+        // Then — still only 2 tabs
+        XCTAssertEqual(sut.tabs.count, 2)
+    }
+
+    // MARK: - State Independence Tests
+
+    func testTabStateIndependence_switchingTabs_preservesState() async {
+        // Given — two tabs, each with independent VMs
+        let conn1 = makeConnection(name: "Server1", host: "host1.com")
+        let conn2 = makeConnection(name: "Server2", host: "host2.com")
+        sut.openTab(connection: conn1, password: "pass1")
+        sut.openTab(connection: conn2, password: "pass2")
+
+        let tab0VM = sut.tabs[0].viewModel
+        let tab1VM = sut.tabs[1].viewModel
+
+        // Mutate tab 0's VM state directly (independent of session)
+        tab0VM.sortCriteria = .date
+        tab0VM.sortAscending = false
+        tab0VM.showHiddenFiles = true
+
+        // Tab 1 should still have default state
+        XCTAssertEqual(tab1VM.sortCriteria, .name, "Tab 1 sort criteria should be default")
+        XCTAssertTrue(tab1VM.sortAscending, "Tab 1 sort ascending should be default")
+        XCTAssertFalse(tab1VM.showHiddenFiles, "Tab 1 showHiddenFiles should be default")
+
+        // When — switch to tab 1, then back to tab 0
+        sut.switchToTab(at: 1)
+        XCTAssertEqual(sut.activeTabIndex, 1)
+
+        sut.switchToTab(at: 0)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+
+        // Then — tab 0's VM state is preserved
+        XCTAssertEqual(tab0VM.sortCriteria, .date,
+                       "Tab 0's sort criteria must survive switching away and back")
+        XCTAssertFalse(tab0VM.sortAscending,
+                       "Tab 0's sort ascending must survive switching away and back")
+        XCTAssertTrue(tab0VM.showHiddenFiles,
+                      "Tab 0's showHiddenFiles must survive switching away and back")
+
+        // Tab 1's state is unaffected
+        XCTAssertEqual(tab1VM.sortCriteria, .name,
+                       "Tab 1's state must not be affected by tab 0's mutations")
+    }
+
+    func testTabStateIndependence_closingTab_doesNotAffectOthers() async {
+        // Given — 3 tabs with independent VMs
+        let conn1 = makeConnection(name: "S1")
+        let conn2 = makeConnection(name: "S2")
+        let conn3 = makeConnection(name: "S3")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+
+        let tab0VM = sut.tabs[0].viewModel
+        let tab1VM = sut.tabs[1].viewModel
+        let tab2VM = sut.tabs[2].viewModel
+
+        // Mutate each tab's VM state
+        tab0VM.sortCriteria = .date
+        tab1VM.sortAscending = false
+        tab2VM.showHiddenFiles = true
+
+        // Verify initial state
+        XCTAssertEqual(tab0VM.sortCriteria, .date)
+        XCTAssertEqual(tab1VM.sortAscending, false)
+        XCTAssertTrue(tab2VM.showHiddenFiles)
+
+        // When — close the middle tab (index 1)
+        sut.switchToTab(at: 1)
+        await sut.closeTab(at: 1)
+
+        // Then — only 2 tabs remain, unaffected
+        XCTAssertEqual(sut.tabs.count, 2)
+        XCTAssertEqual(tab0VM.sortCriteria, .date,
+                       "Tab 0's state must not change when tab 1 is closed")
+        XCTAssertTrue(tab2VM.showHiddenFiles,
+                      "Tab 2's state must not change when tab 1 is closed")
+    }
+
+    func testOpenTab_setsActiveToNewTab() {
+        // Given — one tab already open
+        let conn1 = makeConnection(name: "Existing")
+        sut.openTab(connection: conn1, password: "p")
+        XCTAssertEqual(sut.activeTabIndex, 0)
+
+        // When — open a second tab
+        let conn2 = makeConnection(name: "New")
+        sut.openTab(connection: conn2, password: "p")
+
+        // Then — active tab is the newly opened one
+        XCTAssertEqual(sut.activeTabIndex, 1)
+        XCTAssertEqual(sut.activeTab?.connectionName, "New")
+    }
+
+    func testCloseActiveTab_switchesToAdjacent() async {
+        // Given — 3 tabs, active is tab 1 (middle)
+        let conn1 = makeConnection(name: "Left")
+        let conn2 = makeConnection(name: "Middle")
+        let conn3 = makeConnection(name: "Right")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 1)
+        XCTAssertEqual(sut.activeTabIndex, 1)
+
+        // When — close the active (middle) tab
+        await sut.closeTab(at: 1)
+
+        // Then — active stays at index 1, which now points to "Right"
+        XCTAssertEqual(sut.tabs.count, 2)
+        XCTAssertEqual(sut.activeTabIndex, 1)
+        XCTAssertEqual(sut.activeTab?.connectionName, "Right",
+                       "After closing active middle tab, the next tab should become active")
+    }
+
+    // MARK: - Move Tab (Reorder) Tests
+
+    func testMoveTab_basicReorder() {
+        // Given — 3 tabs: [A, B, C]
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        let conn3 = makeConnection(name: "C")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+
+        // When — move tab 0 to index 2: [A, B, C] → [B, C, A]
+        sut.moveTab(from: 0, to: 2)
+
+        // Then
+        XCTAssertEqual(sut.tabs.count, 3)
+        XCTAssertEqual(sut.tabs[0].connectionName, "B")
+        XCTAssertEqual(sut.tabs[1].connectionName, "C")
+        XCTAssertEqual(sut.tabs[2].connectionName, "A")
+    }
+
+    func testMoveTab_samePosition_noChange() {
+        // Given
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+
+        // When — move tab 1 to index 1 (same position)
+        sut.moveTab(from: 1, to: 1)
+
+        // Then — order unchanged
+        XCTAssertEqual(sut.tabs[0].connectionName, "A")
+        XCTAssertEqual(sut.tabs[1].connectionName, "B")
+    }
+
+    func testMoveTab_activeTab_movesWithTab() {
+        // Given — 3 tabs, active = tab 1 (B)
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        let conn3 = makeConnection(name: "C")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 1)
+
+        // When — move tab 1 (active B) to index 0: [A, B, C] → [B, A, C]
+        sut.moveTab(from: 1, to: 0)
+
+        // Then — active follows B to index 0
+        XCTAssertEqual(sut.tabs[0].connectionName, "B")
+        XCTAssertEqual(sut.tabs[1].connectionName, "A")
+        XCTAssertEqual(sut.tabs[2].connectionName, "C")
+        XCTAssertEqual(sut.activeTabIndex, 0)
+        XCTAssertEqual(sut.activeTab?.connectionName, "B")
+    }
+
+    func testMoveTab_beforeActive_shiftsActiveIndex() {
+        // Given — 3 tabs: [A, B, C], active = tab 1 (B)
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        let conn3 = makeConnection(name: "C")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 1)
+
+        // When — move tab 0 to index 1: [A, B, C] → [B, A, C]
+        // Remove A from 0: [B, C] (B now at index 0)
+        // Insert A at 1: [B, A, C] (B stays at 0)
+        // sourceIndex(0) < active(1) and destinationIndex(1) >= active(1)
+        // → active shifts left by 1: 1 → 0
+        sut.moveTab(from: 0, to: 1)
+
+        // Then
+        XCTAssertEqual(sut.tabs[0].connectionName, "B")
+        XCTAssertEqual(sut.tabs[1].connectionName, "A")
+        XCTAssertEqual(sut.tabs[2].connectionName, "C")
+        XCTAssertEqual(sut.activeTabIndex, 0, "Active should shift from 1 to 0")
+        XCTAssertEqual(sut.activeTab?.connectionName, "B")
+    }
+
+    func testMoveTab_afterActive_noShift() {
+        // Given — 3 tabs, active = tab 0 (A)
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        let conn3 = makeConnection(name: "C")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 0)
+
+        // When — move tab 2 to index 1: [A, B, C] → [A, C, B]
+        // Active is at 0, moved tab was after active, no shift needed
+        sut.moveTab(from: 2, to: 1)
+
+        // Then
+        XCTAssertEqual(sut.tabs[0].connectionName, "A")
+        XCTAssertEqual(sut.tabs[1].connectionName, "C")
+        XCTAssertEqual(sut.tabs[2].connectionName, "B")
+        XCTAssertEqual(sut.activeTabIndex, 0, "Active should remain at 0")
+    }
+
+    func testMoveTab_invalidIndices_noChange() {
+        // Given
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+
+        // When — out-of-range source index
+        sut.moveTab(from: 5, to: 0)
+        XCTAssertEqual(sut.tabs[0].connectionName, "A")
+        XCTAssertEqual(sut.tabs[1].connectionName, "B")
+
+        // When — out-of-range destination index
+        sut.moveTab(from: 0, to: 10)
+        XCTAssertEqual(sut.tabs[0].connectionName, "A")
+        XCTAssertEqual(sut.tabs[1].connectionName, "B")
+
+        // When — negative index
+        sut.moveTab(from: -1, to: 0)
+        XCTAssertEqual(sut.tabs[0].connectionName, "A")
+        XCTAssertEqual(sut.tabs[1].connectionName, "B")
+    }
+
+    // MARK: - Keyboard Navigation Tests
+
+    func testSwitchToNextTab_wrapsAround() {
+        // Given — 3 tabs, active = 2 (last)
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        let conn3 = makeConnection(name: "C")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 2)
+        XCTAssertEqual(sut.activeTabIndex, 2)
+
+        // When
+        sut.switchToNextTab()
+
+        // Then — wraps around to index 0
+        XCTAssertEqual(sut.activeTabIndex, 0)
+        XCTAssertEqual(sut.activeTab?.connectionName, "A")
+    }
+
+    func testSwitchToPreviousTab_wrapsAround() {
+        // Given — 3 tabs, active = 0 (first)
+        let conn1 = makeConnection(name: "A")
+        let conn2 = makeConnection(name: "B")
+        let conn3 = makeConnection(name: "C")
+        sut.openTab(connection: conn1, password: "p")
+        sut.openTab(connection: conn2, password: "p")
+        sut.openTab(connection: conn3, password: "p")
+        sut.switchToTab(at: 0)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+
+        // When
+        sut.switchToPreviousTab()
+
+        // Then — wraps around to last index (2)
+        XCTAssertEqual(sut.activeTabIndex, 2)
+        XCTAssertEqual(sut.activeTab?.connectionName, "C")
+    }
+
+    func testSwitchToNextTab_noTabs_noop() {
+        // Given — no tabs
+        XCTAssertNil(sut.activeTabIndex)
+
+        // When
+        sut.switchToNextTab()
+
+        // Then — no crash, still nil
+        XCTAssertNil(sut.activeTabIndex)
+    }
+
+    func testSwitchToNextTab_singleTab_noop() {
+        // Given — 1 tab, active = 0
+        let conn = makeConnection()
+        sut.openTab(connection: conn, password: "p")
+        sut.switchToTab(at: 0)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+
+        // When
+        sut.switchToNextTab()
+
+        // Then — stays at 0 (no wrap needed with single tab)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+    }
+
+    func testSwitchToPreviousTab_noTabs_noop() {
+        // Given — no tabs
+        XCTAssertNil(sut.activeTabIndex)
+
+        // When
+        sut.switchToPreviousTab()
+
+        // Then — no crash, still nil
+        XCTAssertNil(sut.activeTabIndex)
+    }
+}

@@ -18,7 +18,7 @@ struct RemoteFile: Identifiable, Hashable, Sendable, Codable {
     let owner: String?
     let group: String?
 
-    init(
+    nonisolated init(
         id: UUID = UUID(),
         name: String,
         path: String,
@@ -52,7 +52,7 @@ struct RemoteFile: Identifiable, Hashable, Sendable, Codable {
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
 
-    var fileExtension: String {
+    nonisolated var fileExtension: String {
         name.fileExtension.lowercased()
     }
 
@@ -77,7 +77,11 @@ struct RemoteFile: Identifiable, Hashable, Sendable, Codable {
         if isDirectory {
             return .directory
         }
-        return FileType.from(extension: fileExtension)
+        let ext = fileExtension
+        if ext.isEmpty {
+            return FileType.from(filename: name)
+        }
+        return FileType.from(extension: ext)
     }
 }
 
@@ -185,11 +189,28 @@ enum FileType: String, Sendable {
             return .unknown
         }
     }
+
+    /// Classifies extensionless files by their filename
+    static func from(filename: String) -> FileType {
+        switch filename.lowercased() {
+        // Build / configuration files
+        case "dockerfile", "makefile", "gemfile", "rakefile", "procfile",
+             "vagrantfile", "jenkinsfile", "brewfile", "podfile", "cartfile",
+             "containerfile", "tsconfig":
+            return .configuration
+        // Documentation files
+        case "readme", "license", "copying", "changelog", "authors",
+             "contributors", "news", "todo", "changes", "thanks":
+            return .text
+        default:
+            return .unknown
+        }
+    }
 }
 
 // MARK: - Sorting
 extension RemoteFile {
-    static func sortedFiles(_ files: [RemoteFile], by criteria: SortCriteria, ascending: Bool = true) -> [RemoteFile] {
+    nonisolated static func sortedFiles(_ files: [RemoteFile], by criteria: SortCriteria, ascending: Bool = true) -> [RemoteFile] {
         files.sorted { file1, file2 in
             // Directories always come first
             if file1.isDirectory != file2.isDirectory {
@@ -219,5 +240,15 @@ extension RemoteFile {
         case size = "Size"
         case date = "Date Modified"
         case type = "Type"
+
+        /// Maps to NSTableColumn identifier key for sort descriptor sync
+        var columnKey: String {
+            switch self {
+            case .name: return "name"
+            case .size: return "size"
+            case .date: return "date"
+            case .type: return "kind"
+            }
+        }
     }
 }

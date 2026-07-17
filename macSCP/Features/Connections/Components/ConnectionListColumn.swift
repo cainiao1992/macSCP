@@ -37,11 +37,22 @@ struct ConnectionListColumn: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
+                    if let connection = viewModel.selectedConnection {
+                        viewModel.connectToServer(connection)
+                    }
+                } label: {
+                    Label("Open Connection", systemImage: "arrow.right.square")
+                }
+                .help("Open selected connection")
+                .disabled(viewModel.selectedConnection == nil)
+
+                Button {
                     viewModel.isShowingNewConnectionSheet = true
                 } label: {
                     Label("New Connection", systemImage: "square.and.pencil")
                 }
                 .help("New Connection")
+                .accessibilityIdentifier("newConnectionButton")
             }
         }
     }
@@ -83,66 +94,91 @@ struct ConnectionListColumn: View {
         }
     }
 
+    // NOTE: ScrollView refactor lost List's native .swipeActions support (HI-04).
+    // Delete is currently available via context menu (right-click) and keyboard
+    // (Delete key / .onDeleteCommand). Restoring swipe-to-delete requires either:
+    // 1. Custom DragGesture with offset animation and threshold detection, or
+    // 2. Reverting to List with custom row styling for selection highlighting.
+    // This needs a design decision on the List vs ScrollView trade-off.
     private var connectionList: some View {
-        List(viewModel.filteredConnections, selection: $viewModel.selectedConnectionId) { connection in
-            ConnectionRowView(connection: connection)
-                .draggable(connection)
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    Button(role: .destructive) {
-                        Task { await viewModel.deleteConnection(connection) }
-                    } label: {
-                        Image(systemName: "trash")
-                    }
-                }
-                .contextMenu {
-                    Button {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(viewModel.filteredConnections) { connection in
+                    let isSelected = viewModel.selectedConnectionId == connection.id
+                    ConnectionRowView(
+                        connection: connection,
+                        connectionStatus: viewModel.connectionStatuses[connection.id],
+                        isSelected: isSelected
+                    )
+                    .onTapGesture(count: 2) {
                         viewModel.connectToServer(connection)
-                    } label: {
-                        Label("Open File Browser", systemImage: "folder")
                     }
-
-                    Button {
-                        viewModel.requestTerminal(for: connection)
-                    } label: {
-                        Label("Open Terminal", systemImage: "terminal")
+                    .onTapGesture {
+                        viewModel.selectedConnectionId = connection.id
                     }
-                    .disabled(connection.connectionType != .sftp)
-
-                    Divider()
-
-                    Button {
-                        viewModel.editConnection(connection)
-                    } label: {
-                        Label("Edit", systemImage: "pencil")
-                    }
-
-                    Button {
-                        Task {
-                            await viewModel.duplicateConnection(connection)
+                    .draggable(connection)
+                    .accessibilityIdentifier("connectionRow_\(connection.name)")
+                    .contextMenu {
+                        Button {
+                            viewModel.connectToServer(connection)
+                        } label: {
+                            Label("Open File Browser", systemImage: "folder")
                         }
-                    } label: {
-                        Label("Duplicate", systemImage: "plus.square.on.square")
-                    }
 
-                    Divider()
-
-                    Button(role: .destructive) {
-                        Task {
-                            await viewModel.deleteConnection(connection)
+                        Button {
+                            viewModel.requestTerminal(for: connection)
+                        } label: {
+                            Label("Open Terminal", systemImage: "terminal")
                         }
-                    } label: {
-                        Label("Delete", systemImage: "trash")
+                        .disabled(connection.connectionType != .sftp)
+
+                        Divider()
+
+                        Button {
+                            viewModel.editConnection(connection)
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+
+                        Button {
+                            Task {
+                                await viewModel.duplicateConnection(connection)
+                            }
+                        } label: {
+                            Label("Duplicate", systemImage: "plus.square.on.square")
+                        }
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            Task {
+                                await viewModel.deleteConnection(connection)
+                            }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
                     }
                 }
-                .tag(connection.id)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
         }
-        .listStyle(.inset)
+        .focusable()
+        .focusEffectDisabled()
         .onKeyPress(.return) {
             if let connection = viewModel.selectedConnection {
                 viewModel.connectToServer(connection)
                 return .handled
             }
             return .ignored
+        }
+        .onKeyPress(.upArrow) {
+            viewModel.selectAdjacentConnection(direction: -1)
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            viewModel.selectAdjacentConnection(direction: 1)
+            return .handled
         }
         .onDeleteCommand {
             if let connection = viewModel.selectedConnection {

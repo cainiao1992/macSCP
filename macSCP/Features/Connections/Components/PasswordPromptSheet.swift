@@ -8,12 +8,32 @@
 import SwiftUI
 
 struct PasswordPromptSheet: View {
-    let connectionName: String
+    let connection: Connection
+    var connectionError: AppError?
+    var isConnecting: Bool = false
     let onConnect: (String) -> Void
     let onCancel: () -> Void
 
     @State private var password: String = ""
     @FocusState private var isFocused: Bool
+
+    private var promptTitle: String {
+        switch connection.authMethod {
+        case .privateKey:
+            return "Enter Passphrase"
+        default:
+            return "Enter Password"
+        }
+    }
+
+    private var fieldPlaceholder: String {
+        switch connection.authMethod {
+        case .privateKey:
+            return "Private Key Passphrase (optional)"
+        default:
+            return "Password"
+        }
+    }
 
     var body: some View {
         VStack(spacing: UIConstants.spacing) {
@@ -21,24 +41,51 @@ struct PasswordPromptSheet: View {
                 .font(.largeTitle)
                 .foregroundStyle(.secondary)
 
-            Text("Enter Password")
+            Text(promptTitle)
                 .font(.headline)
 
-            Text("Enter the password for \"\(connectionName)\"")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            // Server context card (PASS-01)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(connection.name)
+                    .font(.headline)
+                if connection.isSFTPConnection {
+                    Text("\(connection.host):\(connection.port)")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Text(connection.username)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(.quaternary.opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
 
-            SecureField("Password", text: $password)
+            SecureField(fieldPlaceholder, text: $password)
                 .textFieldStyle(.roundedBorder)
                 .focused($isFocused)
                 .onSubmit {
-                    if !password.isEmpty {
+                    if !password.isEmpty || connection.authMethod == .privateKey {
                         onConnect(password)
                     }
                 }
 
+            // Error display (PASS-02)
+            if let err = connectionError {
+                Text(err.errorDescription ?? "")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             HStack {
+                if isConnecting {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
                 Button("Cancel") {
                     onCancel()
                 }
@@ -48,7 +95,7 @@ struct PasswordPromptSheet: View {
                     onConnect(password)
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(password.isEmpty)
+                .disabled((password.isEmpty && connection.authMethod != .privateKey) || isConnecting)
             }
         }
         .padding(UIConstants.spacing * 2)
@@ -62,7 +109,11 @@ struct PasswordPromptSheet: View {
 // MARK: - Preview
 #Preview {
     PasswordPromptSheet(
-        connectionName: "Production Server",
+        connection: Connection(
+            name: "Production Server",
+            host: "example.com",
+            username: "admin"
+        ),
         onConnect: { _ in },
         onCancel: {}
     )

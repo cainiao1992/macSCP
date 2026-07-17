@@ -13,6 +13,13 @@ enum SidebarSelection: Hashable, Sendable {
     case folder(UUID)
 }
 
+enum TestConnectionState: Equatable {
+    case idle
+    case testing
+    case success
+    case failure(String)
+}
+
 @MainActor
 @Observable
 final class ConnectionListViewModel {
@@ -21,6 +28,10 @@ final class ConnectionListViewModel {
     private(set) var folders: [Folder] = []
     private(set) var state: ViewState<Void> = .idle
     var error: AppError?
+    private(set) var connectionError: AppError?
+    private(set) var isConnecting: Bool = false
+    private(set) var testConnectionState: TestConnectionState = .idle
+    private(set) var connectionStatuses: [UUID: ConnectionStatus] = [:]
 
     var selectedSidebarItem: SidebarSelection = .allConnections
     var searchText: String = ""
@@ -39,7 +50,6 @@ final class ConnectionListViewModel {
     var folderToDelete: Folder?
 
     // Window opening state
-    var pendingWindowId: String?
     var pendingTerminalWindowId: String?
 
     // MARK: - Dependencies
@@ -47,18 +57,31 @@ final class ConnectionListViewModel {
     private let folderRepository: FolderRepositoryProtocol
     private let keychainService: KeychainServiceProtocol
     private let windowManager: WindowManager
+    private let tabManager: TabManager
+    private let makeSFTPSession: () -> any SFTPSessionProtocol
+    private let makeS3Session: () -> any S3SessionProtocol
+    static let testConnectionTimeout: Duration = .seconds(15)
+    private let connectivityService: ConnectivityService
 
     // MARK: - Initialization
     init(
         connectionRepository: ConnectionRepositoryProtocol,
         folderRepository: FolderRepositoryProtocol,
         keychainService: KeychainServiceProtocol,
-        windowManager: WindowManager
+        windowManager: WindowManager,
+        tabManager: TabManager,
+        makeSFTPSession: (() -> any SFTPSessionProtocol)? = nil,
+        makeS3Session: (() -> any S3SessionProtocol)? = nil,
+        connectivityService: ConnectivityService? = nil
     ) {
         self.connectionRepository = connectionRepository
         self.folderRepository = folderRepository
         self.keychainService = keychainService
         self.windowManager = windowManager
+        self.tabManager = tabManager
+        self.makeSFTPSession = makeSFTPSession ?? { DependencyContainer.shared.makeSFTPSession() }
+        self.makeS3Session = makeS3Session ?? { DependencyContainer.shared.makeS3Session() }
+        self.connectivityService = connectivityService ?? ConnectivityService.shared
     }
 
     // MARK: - Computed Properties
@@ -88,6 +111,23 @@ final class ConnectionListViewModel {
         connections.filter { $0.folderId == nil }
     }
 
+    var favoriteConnections: [Connection] {
+        connections.filter(\.isFavorite)
+    }
+
+    var recentConnections: [Connection] {
+        let base = searchText.isEmpty ? connections : connections.filter { conn in
+            conn.name.localizedCaseInsensitiveContains(searchText) ||
+            conn.host.localizedCaseInsensitiveContains(searchText) ||
+            conn.username.localizedCaseInsensitiveContains(searchText)
+        }
+        return base
+            .filter { $0.lastUsedAt != nil }
+            .sorted { ($0.lastUsedAt ?? .distantPast) > ($1.lastUsedAt ?? .distantPast) }
+            .prefix(5)
+            .map { $0 }
+    }
+
     var totalConnectionCount: Int {
         connections.count
     }
@@ -99,6 +139,43 @@ final class ConnectionListViewModel {
     var selectedConnection: Connection? {
         guard let id = selectedConnectionId else { return nil }
         return connections.first { $0.id == id }
+    }
+
+    // MARK: - Keyboard Navigation
+
+    /// Flat list of all visible connections in display order (recent, favorites, unfoldered, folders).
+    var navigableConnections: [Connection] {
+        var result: [Connection] = []
+        var seen = Set<UUID>()
+
+        for conn in recentConnections {
+            if seen.insert(conn.id).inserted { result.append(conn) }
+        }
+        for conn in filteredConnections where conn.isFavorite {
+            if seen.insert(conn.id).inserted { result.append(conn) }
+        }
+        for conn in filteredConnections where conn.folderId == nil {
+            if seen.insert(conn.id).inserted { result.append(conn) }
+        }
+        for folder in folders {
+            for conn in filteredConnections where conn.folderId == folder.id {
+                if seen.insert(conn.id).inserted { result.append(conn) }
+            }
+        }
+        return result
+    }
+
+    func selectAdjacentConnection(direction: Int) {
+        let list = navigableConnections
+        guard !list.isEmpty else { return }
+
+        if let currentId = selectedConnectionId,
+           let idx = list.firstIndex(where: { $0.id == currentId }) {
+            let newIndex = min(max(idx + direction, 0), list.count - 1)
+            selectedConnectionId = list[newIndex].id
+        } else {
+            selectedConnectionId = direction > 0 ? list.first?.id : list.last?.id
+        }
     }
 
     var selectedFolder: Folder? {
@@ -118,6 +195,9 @@ final class ConnectionListViewModel {
             connections = try await connectionsTask
             folders = try await foldersTask
             state = .success(())
+
+            // Trigger on-demand connectivity check (LIST-03)
+            Task { await checkAllConnectionStatuses() }
         } catch {
             logError("Failed to load data: \(error)", category: .database)
             state = .error(AppError.from(error))
@@ -126,6 +206,28 @@ final class ConnectionListViewModel {
 
     func refresh() async {
         await loadData()
+    }
+
+    // MARK: - Connectivity Status
+
+    func checkConnectionStatus(_ connection: Connection) async {
+        guard connection.connectionType == .sftp else { return }
+        connectionStatuses[connection.id] = .checking
+        let status = await connectivityService.checkConnectivity(
+            host: connection.host,
+            port: connection.port
+        )
+        connectionStatuses[connection.id] = status
+    }
+
+    func checkAllConnectionStatuses() async {
+        await withTaskGroup(of: Void.self) { group in
+            for connection in connections where connection.connectionType == .sftp {
+                group.addTask { @MainActor [weak self] in
+                    await self?.checkConnectionStatus(connection)
+                }
+            }
+        }
     }
 
     // MARK: - Connection Actions
@@ -218,10 +320,27 @@ final class ConnectionListViewModel {
     func moveConnection(_ connection: Connection, to folder: Folder?) async {
         do {
             try await connectionRepository.move(connectionId: connection.id, toFolderId: folder?.id)
-            await loadData()
+            // Update local state directly to avoid .loading flash
+            if let index = connections.firstIndex(where: { $0.id == connection.id }) {
+                connections[index].folderId = folder?.id
+            }
             logInfo("Connection moved: \(connection.name)", category: .database)
         } catch {
             logError("Failed to move connection: \(error)", category: .database)
+            self.error = AppError.from(error)
+        }
+    }
+
+    func toggleFavorite(_ connection: Connection) async {
+        do {
+            try await connectionRepository.toggleFavorite(id: connection.id)
+            // Update local state directly to avoid .loading flash
+            if let index = connections.firstIndex(where: { $0.id == connection.id }) {
+                connections[index].isFavorite.toggle()
+            }
+            logInfo("Connection favorite toggled: \(connection.name)", category: .database)
+        } catch {
+            logError("Failed to toggle favorite: \(error)", category: .database)
             self.error = AppError.from(error)
         }
     }
@@ -304,6 +423,7 @@ final class ConnectionListViewModel {
             }
 
             connectionToConnect = connection
+            connectionError = nil
 
             if connection.connectionType == .s3 {
                 // For S3, check for saved credentials
@@ -333,9 +453,52 @@ final class ConnectionListViewModel {
 
     func connectWithPassword(_ password: String) {
         guard let connection = connectionToConnect else { return }
-        openFileBrowser(for: connection, password: password)
-        isShowingPasswordPrompt = false
-        connectionToConnect = nil
+        Task { await attemptConnect(connection, password: password) }
+    }
+
+    func attemptConnect(_ connection: Connection, password: String) async {
+        isConnecting = true
+        defer { isConnecting = false }
+
+        do {
+            if connection.connectionType == .s3 {
+                let session = makeS3Session()
+                try await session.connect(
+                    accessKeyId: connection.username,
+                    secretAccessKey: password,
+                    region: connection.s3Region ?? "us-east-1",
+                    bucket: connection.s3Bucket ?? "",
+                    endpoint: connection.s3Endpoint
+                )
+            } else {
+                let session = makeSFTPSession()
+                if connection.authMethod == .privateKey {
+                    try await session.connect(
+                        host: connection.host,
+                        port: connection.port,
+                        username: connection.username,
+                        privateKeyPath: connection.privateKeyPath ?? "",
+                        passphrase: password.isEmpty ? nil : password
+                    )
+                } else {
+                    try await session.connect(
+                        host: connection.host,
+                        port: connection.port,
+                        username: connection.username,
+                        password: password
+                    )
+                }
+            }
+
+            openFileBrowser(for: connection, password: password)
+            try await connectionRepository.updateLastUsedAt(id: connection.id)
+
+            isShowingPasswordPrompt = false
+            connectionToConnect = nil
+            connectionError = nil
+        } catch {
+            connectionError = AppError.from(error)
+        }
     }
 
     func cancelConnect() {
@@ -343,32 +506,89 @@ final class ConnectionListViewModel {
         connectionToConnect = nil
     }
 
-    private func openFileBrowser(for connection: Connection, password: String) {
-        let data = FileBrowserWindowData(
-            connectionId: connection.id,
-            connectionName: connection.name,
-            host: connection.host,
-            port: connection.port,
-            username: connection.username,
-            password: password,
-            authMethod: connection.authMethod,
-            privateKeyPath: connection.privateKeyPath,
-            connectionType: connection.connectionType,
-            s3Region: connection.s3Region,
-            s3Bucket: connection.s3Bucket,
-            s3Endpoint: connection.s3Endpoint,
-            s3SecretAccessKey: connection.connectionType == .s3 ? password : nil
-        )
+    // MARK: - Test Connection
 
-        let windowId = windowManager.storeFileBrowserData(data)
-        logInfo("Stored window data with ID: \(windowId)", category: .ui)
-        pendingWindowId = windowId
+    func testConnection(_ connection: Connection, password: String?) async {
+        // Guard against missing/empty credentials before attempting the test
+        let effectivePassword: String
+        if let pw = password, !pw.isEmpty {
+            effectivePassword = pw
+        } else if connection.authMethod == .privateKey {
+            effectivePassword = ""  // passphrase is optional for key auth
+        } else {
+            testConnectionState = .failure("Password is required for testing")
+            return
+        }
+
+        testConnectionState = .testing
+
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                // Task 1: Attempt connection
+                group.addTask { @MainActor [weak self] in
+                    guard let self else { return }
+                    if connection.connectionType == .s3 {
+                        let session = self.makeS3Session()
+                        defer { Task { await session.disconnect() } }
+                        try await session.connect(
+                            accessKeyId: connection.username,
+                            secretAccessKey: effectivePassword,
+                            region: connection.s3Region ?? "us-east-1",
+                            bucket: connection.s3Bucket ?? "",
+                            endpoint: connection.s3Endpoint
+                        )
+                    } else {
+                        let session = self.makeSFTPSession()
+                        defer { Task { await session.disconnect() } }
+                        if connection.authMethod == .privateKey {
+                            try await session.connect(
+                                host: connection.host,
+                                port: connection.port,
+                                username: connection.username,
+                                privateKeyPath: connection.privateKeyPath ?? "",
+                                passphrase: effectivePassword.isEmpty ? nil : effectivePassword
+                            )
+                        } else {
+                            try await session.connect(
+                                host: connection.host,
+                                port: connection.port,
+                                username: connection.username,
+                                password: effectivePassword
+                            )
+                        }
+                    }
+                }
+
+                // Task 2: Timeout deadline
+                group.addTask {
+                    try await Task.sleep(for: Self.testConnectionTimeout)
+                    throw AppError.connectionTimeout
+                }
+
+                // First task to finish wins; cancel the other
+                try await group.next()
+                group.cancelAll()
+            }
+            testConnectionState = .success
+        } catch is CancellationError {
+            testConnectionState = .failure(AppError.connectionTimeout.errorDescription ?? "Connection timed out")
+        } catch {
+            testConnectionState = .failure(error.localizedDescription)
+        }
+    }
+
+    func resetTestConnectionState() {
+        testConnectionState = .idle
+    }
+
+    private func openFileBrowser(for connection: Connection, password: String) {
+        tabManager.openTab(connection: connection, password: password)
         AnalyticsService.trackConnectionConnected(protocol: .init(from: connection.connectionType), success: true)
-        logInfo("Set pendingWindowId to: \(windowId)", category: .ui)
+        logInfo("Opened tab for connection: \(connection.name)", category: .ui)
     }
 
     func clearPendingWindow() {
-        pendingWindowId = nil
+        // No-op: tabs are opened directly via TabManager
     }
 
     func clearPendingTerminalWindow() {

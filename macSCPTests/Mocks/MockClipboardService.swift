@@ -9,7 +9,7 @@ import Foundation
 @testable import macSCP
 
 @MainActor
-final class MockClipboardService {
+final class MockClipboardService: ClipboardServiceProtocol {
     // MARK: - State
     private(set) var state = ClipboardState()
 

@@ -66,8 +66,8 @@ struct ConnectionListView: View {
             detailColumn
         }
         .navigationTitle("")
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .searchable(text: $viewModel.searchText, prompt: "Search connections")
+            .accessibilityIdentifier("searchField")
         .onChange(of: viewModel.selectedSidebarItem) {
             viewModel.selectedConnectionId = nil
         }
@@ -85,6 +85,15 @@ struct ConnectionListView: View {
                 },
                 onCancel: {
                     viewModel.isShowingNewConnectionSheet = false
+                },
+                onTestConnection: { connection, password in
+                    Task {
+                        await viewModel.testConnection(connection, password: password)
+                    }
+                },
+                testConnectionState: viewModel.testConnectionState,
+                onResetTestState: {
+                    viewModel.resetTestConnectionState()
                 }
             )
         }
@@ -102,6 +111,15 @@ struct ConnectionListView: View {
                     onCancel: {
                         viewModel.isShowingEditConnectionSheet = false
                         viewModel.connectionToEdit = nil
+                    },
+                    onTestConnection: { connection, password in
+                        Task {
+                            await viewModel.testConnection(connection, password: password)
+                        }
+                    },
+                    testConnectionState: viewModel.testConnectionState,
+                    onResetTestState: {
+                        viewModel.resetTestConnectionState()
                     }
                 )
             }
@@ -125,7 +143,9 @@ struct ConnectionListView: View {
         .sheet(isPresented: $viewModel.isShowingPasswordPrompt) {
             if let connection = viewModel.connectionToConnect {
                 PasswordPromptSheet(
-                    connectionName: connection.name,
+                    connection: connection,
+                    connectionError: viewModel.connectionError,
+                    isConnecting: viewModel.isConnecting,
                     onConnect: { password in
                         viewModel.connectWithPassword(password)
                     },
@@ -153,13 +173,6 @@ struct ConnectionListView: View {
             }
         }
         .errorAlert($viewModel.error)
-        .onChange(of: viewModel.pendingWindowId) { _, windowId in
-            if let windowId = windowId {
-                logInfo("Opening file browser window with ID: \(windowId)", category: .ui)
-                openWindow(id: WindowID.fileBrowser, value: windowId)
-                viewModel.clearPendingWindow()
-            }
-        }
         .onChange(of: viewModel.pendingTerminalWindowId) { _, windowId in
             if let windowId = windowId {
                 logInfo("Opening terminal window with ID: \(windowId)", category: .ui)

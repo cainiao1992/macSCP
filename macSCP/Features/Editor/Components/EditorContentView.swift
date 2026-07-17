@@ -11,10 +11,7 @@ struct EditorContentView: View {
     @Bindable var viewModel: FileEditorViewModel
 
     var body: some View {
-        TextEditor(text: $viewModel.content)
-            .font(.system(.body, design: .monospaced))
-            .scrollContentBackground(.hidden)
-            .background(Color(.textBackgroundColor))
+        SyntaxHighlightingTextView(viewModel: viewModel)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -31,6 +28,6 @@ struct EditorContentView: View {
 
         hello();
         """,
-        fileRepository: FileRepository(sftpSession: SFTPSession())
+        fileRepository: FileRepository(sftpSession: SystemSFTPSession())
     ))
 }

@@ -13,160 +13,184 @@ final class ConnectionFlowUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["--uitesting"]
         app.launch()
+
+        let menuBar = app.menuBars.firstMatch
+        XCTAssertTrue(menuBar.waitForExistence(timeout: 10), "App should launch with menu bar")
     }
 
     override func tearDownWithError() throws {
         app = nil
     }
 
-    // MARK: - Helper
+    // MARK: - App Launch Tests
 
-    /// Waits for the app to be ready by checking for menu bar (always present in macOS apps)
-    private func waitForAppReady() -> Bool {
-        let menuBar = app.menuBars.firstMatch
-        return menuBar.waitForExistence(timeout: 5)
+    func testAppLaunchesWithSidebar() {
+        let sidebar = app.outlines["sidebar"]
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 5), "Sidebar should be visible")
     }
 
-    // MARK: - Connection List Tests
-
-    func testMainWindowAppears() {
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should launch with menu bar")
-
-        // App should be running in foreground
-        XCTAssertTrue(app.state == .runningForeground, "App should be running in foreground")
-    }
-
-    func testNewConnectionButtonExists() {
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should be ready")
-
-        // App should be running - UI elements may vary based on state
-        XCTAssertTrue(app.state == .runningForeground, "App should be running")
-    }
-
-    func testRefreshButtonExists() {
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should be ready")
-
-        // App should be running - UI elements may vary based on state
-        XCTAssertTrue(app.state == .runningForeground, "App should be running")
-    }
-
-    // MARK: - New Connection Sheet Tests
-
-    func testOpenNewConnectionSheet() {
-        // Given
-        let addButton = app.toolbars.buttons["New Connection"].firstMatch
-
-        // When
-        if addButton.exists {
-            addButton.click()
-
-            // Then
-            let sheet = app.sheets.firstMatch
-            XCTAssertTrue(sheet.waitForExistence(timeout: 2))
-        }
-    }
-
-    func testNewConnectionFormFields() {
-        // Given
-        let addButton = app.toolbars.buttons["New Connection"].firstMatch
-
-        if addButton.exists {
-            addButton.click()
-
-            let sheet = app.sheets.firstMatch
-            _ = sheet.waitForExistence(timeout: 2)
-
-            // Then
-            XCTAssertTrue(sheet.textFields["Name"].exists || sheet.textFields.count > 0)
-        }
-    }
-
-    func testCancelNewConnection() {
-        // Given
-        let addButton = app.toolbars.buttons["New Connection"].firstMatch
-
-        if addButton.exists {
-            addButton.click()
-
-            let sheet = app.sheets.firstMatch
-            _ = sheet.waitForExistence(timeout: 2)
-
-            // When
-            let cancelButton = sheet.buttons["Cancel"]
-            if cancelButton.exists {
-                cancelButton.click()
-
-                // Then
-                XCTAssertFalse(sheet.waitForExistence(timeout: 1))
-            }
-        }
-    }
-
-    // MARK: - Sidebar Tests
-
-    func testSidebarExists() {
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should be ready")
-
-        // App should be running - sidebar structure may vary based on UI
-        XCTAssertTrue(app.state == .runningForeground, "App should be running")
+    func testAppLaunchesWithNewConnectionButton() {
+        let newButton = app.buttons["newConnectionButton"]
+        XCTAssertTrue(newButton.waitForExistence(timeout: 5), "New connection button should be visible")
     }
 
     func testAllConnectionsRowExists() {
-        // Given
-        let sidebar = app.outlines.firstMatch
-
-        // Then
-        let allConnectionsRow = sidebar.staticTexts["All Connections"]
-        XCTAssertTrue(allConnectionsRow.exists || true) // May have different UI
+        let allConnectionsRow = app.staticTexts["allConnectionsRow"]
+        XCTAssertTrue(allConnectionsRow.waitForExistence(timeout: 5), "All Connections row should exist")
     }
 
-    // MARK: - Search Tests
+    // MARK: - Connection Creation Flow
 
-    func testSearchFieldExists() {
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should be ready")
+    func testCreateNewConnection() {
+        let newButton = app.buttons["newConnectionButton"]
+        XCTAssertTrue(newButton.waitForExistence(timeout: 5))
 
-        // App should be running - search field may vary based on UI state
-        XCTAssertTrue(app.state == .runningForeground, "App should be running")
+        newButton.click()
+
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 3), "New connection sheet should appear")
+
+        let nameField = sheet.textFields["nameField"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 2), "Name field should exist")
+
+        let hostField = sheet.textFields["hostField"]
+        XCTAssertTrue(hostField.waitForExistence(timeout: 2), "Host field should exist")
+
+        let usernameField = sheet.textFields["usernameField"]
+        XCTAssertTrue(usernameField.waitForExistence(timeout: 2), "Username field should exist")
+
+        let portField = sheet.textFields["portField"]
+        XCTAssertTrue(portField.waitForExistence(timeout: 2), "Port field should exist")
+
+        nameField.tap()
+        nameField.typeText("Test Server")
+
+        hostField.tap()
+        hostField.typeText("127.0.0.1")
+
+        usernameField.tap()
+        usernameField.typeText("testuser")
+
+        portField.tap()
+        portField.typeText("22")
+
+        let saveButton = sheet.buttons["saveButton"]
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 2))
+        saveButton.click()
+
+        XCTAssertFalse(sheet.waitForExistence(timeout: 2), "Sheet should dismiss")
+
+        let connectionRow = app.staticTexts["Test Server"]
+        XCTAssertTrue(connectionRow.waitForExistence(timeout: 3), "New connection should appear in list")
     }
 
-    func testSearchFieldInput() {
-        // Given
-        let searchField = app.searchFields.firstMatch
+    func testCancelNewConnection() {
+        app.buttons["newConnectionButton"].click()
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 3))
 
-        if searchField.exists {
-            // When
-            searchField.click()
-            searchField.typeText("test")
+        let cancelButton = sheet.buttons["cancelButton"]
+        XCTAssertTrue(cancelButton.waitForExistence(timeout: 2))
+        cancelButton.click()
 
-            // Then
-            XCTAssertEqual(searchField.value as? String, "test")
-        }
+        XCTAssertFalse(sheet.waitForExistence(timeout: 2), "Sheet should dismiss without saving")
     }
 
-    // MARK: - Folder Tests
+    // MARK: - Connection Selection Flow
 
-    func testNewFolderButtonInSidebar() {
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should be ready")
+    func testSelectConnectionShowsDetails() {
+        createTestConnection()
 
-        // App should be running - folder UI may vary based on state
-        XCTAssertTrue(app.state == .runningForeground, "App should be running")
+        let connectionRow = app.staticTexts["Test Server"]
+        XCTAssertTrue(connectionRow.waitForExistence(timeout: 5))
+        connectionRow.click()
+
+        let connectButton = app.buttons["connectButton"]
+        XCTAssertTrue(connectButton.waitForExistence(timeout: 3), "Connect button should appear in detail view")
     }
 
-    // MARK: - Empty State Tests
+    // MARK: - Connection Actions
 
-    func testEmptyStateShowsWhenNoConnections() {
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should launch with menu bar")
+    func testEditConnectionButtonExists() {
+        createTestConnection()
 
-        // The app should be running and able to show content
-        XCTAssertTrue(app.state == .runningForeground, "App should be running in foreground")
+        let connectionRow = app.staticTexts["Test Server"]
+        XCTAssertTrue(connectionRow.waitForExistence(timeout: 5))
+        connectionRow.click()
+
+        let editButton = app.buttons["editButton"]
+        XCTAssertTrue(editButton.waitForExistence(timeout: 3), "Edit button should appear")
+    }
+
+    func testDeleteConnectionButtonExists() {
+        createTestConnection()
+
+        let connectionRow = app.staticTexts["Test Server"]
+        XCTAssertTrue(connectionRow.waitForExistence(timeout: 5))
+        connectionRow.click()
+
+        let deleteButton = app.buttons["deleteButton"]
+        XCTAssertTrue(deleteButton.waitForExistence(timeout: 3), "Delete button should appear")
+    }
+
+    // MARK: - Search Flow
+
+    func testSearchFiltersConnections() {
+        createTestConnection()
+
+        let searchField = app.searchFields["searchField"]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5), "Search field should be visible")
+
+        searchField.click()
+        searchField.typeText("Test")
+
+        let filteredRow = app.staticTexts["Test Server"]
+        XCTAssertTrue(filteredRow.waitForExistence(timeout: 3), "Matching connection should appear")
+
+        searchField.typeKey(XCUIKeyboardKey.delete.rawValue, modifierFlags: [])
+
+        let allRow = app.staticTexts["allConnectionsRow"]
+        XCTAssertTrue(allRow.waitForExistence(timeout: 3), "All connections should be visible after clearing search")
+    }
+
+    func testTerminalButtonExists() {
+        createTestConnection()
+
+        let connectionRow = app.staticTexts["Test Server"]
+        XCTAssertTrue(connectionRow.waitForExistence(timeout: 5))
+        connectionRow.click()
+
+        let terminalButton = app.buttons["terminalButton"]
+        XCTAssertTrue(terminalButton.waitForExistence(timeout: 3), "Terminal button should appear for SFTP connection")
+    }
+
+    // MARK: - Helpers
+
+    private func createTestConnection() {
+        let newButton = app.buttons["newConnectionButton"]
+        guard newButton.waitForExistence(timeout: 3) else { return }
+
+        newButton.click()
+
+        let sheet = app.sheets.firstMatch
+        guard sheet.waitForExistence(timeout: 3) else { return }
+
+        let nameField = sheet.textFields["nameField"]
+        nameField.click()
+        nameField.typeText("Test Server")
+
+        let hostField = sheet.textFields["hostField"]
+        hostField.click()
+        hostField.typeText("127.0.0.1")
+
+        let usernameField = sheet.textFields["usernameField"]
+        usernameField.click()
+        usernameField.typeText("testuser")
+
+        let saveButton = sheet.buttons["saveButton"]
+        saveButton.click()
+
+        _ = app.staticTexts["Test Server"].waitForExistence(timeout: 3)
     }
 }

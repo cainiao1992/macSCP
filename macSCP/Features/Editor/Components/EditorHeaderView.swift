@@ -75,6 +75,6 @@ struct EditorHeaderView: View {
         filePath: "/test.txt",
         fileName: "test.txt",
         initialContent: "Hello",
-        fileRepository: FileRepository(sftpSession: SFTPSession())
+        fileRepository: FileRepository(sftpSession: SystemSFTPSession())
     ))
 }

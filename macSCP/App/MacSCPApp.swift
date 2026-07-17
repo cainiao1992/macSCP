@@ -11,12 +11,17 @@ import Sparkle
 
 @main
 struct MacSCPApp: App {
-    @StateObject private var container = DependencyContainer.shared
+    @StateObject private var container: DependencyContainer
+    @State private var connectionListViewModel: ConnectionListViewModel
 
     private let updaterController: SPUStandardUpdaterController
     @StateObject private var checkForUpdatesViewModel: CheckForUpdatesViewModel
 
     init() {
+        let container = DependencyContainer.shared
+        self._container = StateObject(wrappedValue: container)
+        self._connectionListViewModel = State(initialValue: container.makeConnectionListViewModel())
+
         AnalyticsService.initialize()
         AppLockManager.shared.lockIfNeeded()
 
@@ -32,26 +37,19 @@ struct MacSCPApp: App {
     }
 
     var body: some Scene {
-        // Main Window - Connection List
-        WindowGroup {
-            ConnectionListView(viewModel: container.makeConnectionListViewModel())
-                .appLockOverlay()
-        }
-        .modelContainer(container.modelContainer)
-        .defaultSize(WindowSize.main)
-        .commands {
-            appCommands
-        }
-
-        // File Browser Window
-        WindowGroup(id: WindowID.fileBrowser, for: String.self) { $windowId in
-            if let windowId = windowId {
-                FileBrowserWindow(windowId: windowId)
-                    .appLockOverlay()
-            }
+        // Unified Browser Window (tabbed file browser + connection sidebar)
+        WindowGroup("macSCP") {
+            UnifiedBrowserWindow(
+                tabManager: container.tabManager,
+                connectionListViewModel: connectionListViewModel
+            )
+            .appLockOverlay()
         }
         .modelContainer(container.modelContainer)
         .defaultSize(WindowSize.fileBrowser)
+        .commands {
+            appCommands
+        }
 
         // File Editor Window
         WindowGroup(id: WindowID.fileEditor, for: String.self) { $windowId in
@@ -100,12 +98,17 @@ struct MacSCPApp: App {
 
         CommandGroup(replacing: .newItem) {
             Button("New Connection") {
-                // Handled by main window
+                connectionListViewModel.isShowingNewConnectionSheet = true
             }
             .keyboardShortcut("n", modifiers: .command)
 
+            Button("New Tab") {
+                connectionListViewModel.isShowingNewConnectionSheet = true
+            }
+            .keyboardShortcut("t", modifiers: .command)
+
             Button("New Folder") {
-                // Handled by main window
+                connectionListViewModel.isShowingNewFolderSheet = true
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
         }
@@ -115,6 +118,26 @@ struct MacSCPApp: App {
                 // Handled by active window
             }
             .keyboardShortcut("r", modifiers: .command)
+
+            Button("Close Tab") {
+                Task {
+                    await container.tabManager.closeTab(at: container.tabManager.activeTabIndex ?? 0)
+                }
+            }
+            .keyboardShortcut("w", modifiers: .command)
+            .disabled(!container.tabManager.hasTabs)
+
+            Divider()
+
+            Button("Next Tab") {
+                container.tabManager.switchToNextTab()
+            }
+            .keyboardShortcut(.tab, modifiers: .control)
+
+            Button("Previous Tab") {
+                container.tabManager.switchToPreviousTab()
+            }
+            .keyboardShortcut(.tab, modifiers: [.control, .shift])
         }
 
         CommandGroup(replacing: .help) {

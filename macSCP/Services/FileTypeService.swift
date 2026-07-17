@@ -59,6 +59,15 @@ enum FileTypeService {
         return file.fileType.isEditable
     }
 
+    /// Returns whether a file can be previewed with Quick Look
+    static func isQuickLookPreviewable(_ file: RemoteFile) -> Bool {
+        guard file.isFile else { return false }
+        guard file.size <= 50 * 1024 * 1024 else { return false } // 50 MB limit
+
+        let quickLookTypes: Set<FileType> = [.image, .pdf, .audio, .video]
+        return quickLookTypes.contains(file.fileType)
+    }
+
     /// Returns the UTType for a file extension
     static func utType(for extension: String) -> UTType? {
         UTType(filenameExtension: `extension`)
