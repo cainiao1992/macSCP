@@ -172,6 +172,26 @@ final class DependencyContainer: ObservableObject {
         )
     }
 
+    /// Convenience factory for terminal tabs: builds TerminalWindowData + session from a connection.
+    func makeTerminalViewModel(connection: Connection, password: String) -> TerminalViewModel {
+        let data = TerminalWindowData(
+            connectionId: connection.id,
+            connectionName: connection.name,
+            host: connection.host,
+            port: connection.port,
+            username: connection.username,
+            password: password,
+            authMethod: connection.authMethod,
+            privateKeyPath: connection.privateKeyPath
+        )
+        let session = makeTerminalSession(connectionData: data)
+        return makeTerminalViewModel(
+            connectionName: connection.name,
+            session: session,
+            connectionData: data
+        )
+    }
+
     func makeSSHConfigImportViewModel(existingConnections: [Connection]) -> SSHConfigImportViewModel {
         SSHConfigImportViewModel(
             parser: SSHConfigParser(),

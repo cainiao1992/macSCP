@@ -80,7 +80,10 @@ final class FileBrowserViewModel {
     // Window opening state
     var pendingFileInfoWindowId: String?
     var pendingEditorWindowId: String?
-    var pendingTerminalWindowId: String?
+
+    /// Callback invoked when the user requests a terminal for this connection.
+    /// Wired by TabManager to open a terminal tab in the same window.
+    var onOpenTerminal: ((Connection, String) -> Void)?
 
     // MARK: - Connection Info
     let connection: Connection
@@ -1073,10 +1076,6 @@ final class FileBrowserViewModel {
         pendingEditorWindowId = nil
     }
 
-    func clearPendingTerminalWindow() {
-        pendingTerminalWindowId = nil
-    }
-
     // MARK: - Terminal
 
     func openTerminal() {
@@ -1086,20 +1085,8 @@ final class FileBrowserViewModel {
             return
         }
 
-        let data = TerminalWindowData(
-            connectionId: connection.id,
-            connectionName: connection.name,
-            host: connection.host,
-            port: connection.port,
-            username: connection.username,
-            password: password,
-            authMethod: connection.authMethod,
-            privateKeyPath: connection.privateKeyPath
-        )
-
-        let windowId = WindowManager.shared.storeTerminalData(data)
-        pendingTerminalWindowId = windowId
-        logInfo("Opening terminal from file browser", category: .ui)
+        logInfo("Opening terminal tab from file browser", category: .ui)
+        onOpenTerminal?(connection, password)
     }
 
     func clearError() {

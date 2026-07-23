@@ -59,9 +59,6 @@ final class ConnectionListViewModel {
     var connectionToConnect: Connection?
     var folderToDelete: Folder?
 
-    // Window opening state
-    var pendingTerminalWindowId: String?
-
     // MARK: - Dependencies
     private let connectionRepository: ConnectionRepositoryProtocol
     private let folderRepository: FolderRepositoryProtocol
@@ -657,10 +654,6 @@ final class ConnectionListViewModel {
         // No-op: tabs are opened directly via TabManager
     }
 
-    func clearPendingTerminalWindow() {
-        pendingTerminalWindowId = nil
-    }
-
     // MARK: - Terminal Operations
 
     func openTerminal(for connection: Connection, password: String) {
@@ -670,20 +663,8 @@ final class ConnectionListViewModel {
             return
         }
 
-        let data = TerminalWindowData(
-            connectionId: connection.id,
-            connectionName: connection.name,
-            host: connection.host,
-            port: connection.port,
-            username: connection.username,
-            password: password,
-            authMethod: connection.authMethod,
-            privateKeyPath: connection.privateKeyPath
-        )
-
-        let windowId = windowManager.storeTerminalData(data)
-        logInfo("Stored terminal window data with ID: \(windowId)", category: .ui)
-        pendingTerminalWindowId = windowId
+        tabManager.openTerminalTab(connection: connection, password: password)
+        logInfo("Opened terminal tab for connection: \(connection.name)", category: .ui)
     }
 
     func requestTerminal(for connection: Connection) {

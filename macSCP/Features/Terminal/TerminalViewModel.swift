@@ -8,6 +8,39 @@
 import Foundation
 import SwiftUI
 
+/// Connection data required to establish and maintain a terminal session.
+/// Carried by TerminalViewModel (formerly passed across windows — now lives in tabs).
+struct TerminalWindowData: Sendable {
+    let connectionId: UUID
+    let connectionName: String
+    let host: String
+    let port: Int
+    let username: String
+    let password: String
+    let authMethod: AuthMethod
+    let privateKeyPath: String?
+
+    init(
+        connectionId: UUID,
+        connectionName: String,
+        host: String,
+        port: Int,
+        username: String,
+        password: String,
+        authMethod: AuthMethod,
+        privateKeyPath: String?
+    ) {
+        self.connectionId = connectionId
+        self.connectionName = connectionName
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+        self.authMethod = authMethod
+        self.privateKeyPath = privateKeyPath
+    }
+}
+
 /// State of the terminal connection
 enum TerminalState: Sendable, Equatable {
     case disconnected

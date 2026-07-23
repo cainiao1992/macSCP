@@ -16,7 +16,10 @@ final class TabManagerTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
         capturedSessions = []
-        sut = TabManager(viewModelFactory: makeViewModel)
+        sut = TabManager(
+            browserViewModelFactory: makeViewModel,
+            terminalViewModelFactory: makeTerminalViewModel
+        )
     }
 
     override func tearDown() async throws {
@@ -38,6 +41,24 @@ final class TabManagerTests: XCTestCase {
             fileRepository: repository,
             clipboardService: clipboard,
             password: password
+        )
+    }
+
+    private func makeTerminalViewModel(connection: Connection, password: String) -> TerminalViewModel {
+        let data = TerminalWindowData(
+            connectionId: connection.id,
+            connectionName: connection.name,
+            host: connection.host,
+            port: connection.port,
+            username: connection.username,
+            password: password,
+            authMethod: connection.authMethod,
+            privateKeyPath: connection.privateKeyPath
+        )
+        return TerminalViewModel(
+            connectionName: connection.name,
+            session: MockTerminalSession(),
+            connectionData: data
         )
     }
 
@@ -317,8 +338,8 @@ final class TabManagerTests: XCTestCase {
         sut.openTab(connection: conn1, password: "pass1")
         sut.openTab(connection: conn2, password: "pass2")
 
-        let tab0VM = sut.tabs[0].viewModel
-        let tab1VM = sut.tabs[1].viewModel
+        let tab0VM = sut.tabs[0].fileBrowserViewModel!
+        let tab1VM = sut.tabs[1].fileBrowserViewModel!
 
         // Mutate tab 0's VM state directly (independent of session)
         tab0VM.sortCriteria = .date
@@ -359,9 +380,9 @@ final class TabManagerTests: XCTestCase {
         sut.openTab(connection: conn2, password: "p")
         sut.openTab(connection: conn3, password: "p")
 
-        let tab0VM = sut.tabs[0].viewModel
-        let tab1VM = sut.tabs[1].viewModel
-        let tab2VM = sut.tabs[2].viewModel
+        let tab0VM = sut.tabs[0].fileBrowserViewModel!
+        let tab1VM = sut.tabs[1].fileBrowserViewModel!
+        let tab2VM = sut.tabs[2].fileBrowserViewModel!
 
         // Mutate each tab's VM state
         tab0VM.sortCriteria = .date
@@ -620,6 +641,68 @@ final class TabManagerTests: XCTestCase {
         sut.switchToPreviousTab()
 
         // Then — no crash, still nil
+        XCTAssertNil(sut.activeTabIndex)
+    }
+
+    // MARK: - Terminal Tab Tests
+
+    func testOpenTerminalTab_createsTerminalTab() {
+        // Given
+        let connection = makeConnection()
+
+        // When
+        sut.openTerminalTab(connection: connection, password: "pass")
+
+        // Then
+        XCTAssertEqual(sut.tabs.count, 1)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+        XCTAssertEqual(sut.tabs.first?.kind, .terminal)
+        XCTAssertNotNil(sut.tabs.first?.terminalViewModel)
+        XCTAssertNil(sut.tabs.first?.fileBrowserViewModel)
+        XCTAssertEqual(sut.tabs.first?.icon, "terminal")
+    }
+
+    func testOpenTerminalTab_duplicateConnection_switchesToExisting() {
+        // Given
+        let connection = makeConnection()
+        sut.openTerminalTab(connection: connection, password: "pass")
+
+        // When
+        sut.openTerminalTab(connection: connection, password: "pass")
+
+        // Then — only one terminal tab, switched to it
+        XCTAssertEqual(sut.tabs.count, 1)
+        XCTAssertEqual(sut.activeTabIndex, 0)
+    }
+
+    func testOpenTerminalTab_coexistsWithBrowserTab() {
+        // Given — a browser tab is already open for the connection
+        let connection = makeConnection()
+        sut.openTab(connection: connection, password: "pass")
+        XCTAssertEqual(sut.tabs.count, 1)
+        XCTAssertEqual(sut.tabs[0].kind, .fileBrowser)
+
+        // When — open a terminal tab for the same connection
+        sut.openTerminalTab(connection: connection, password: "pass")
+
+        // Then — both tabs coexist (browser + terminal for same connection)
+        XCTAssertEqual(sut.tabs.count, 2)
+        XCTAssertEqual(sut.tabs[0].kind, .fileBrowser)
+        XCTAssertEqual(sut.tabs[1].kind, .terminal)
+        XCTAssertEqual(sut.activeTabIndex, 1, "Newly opened terminal tab should be active")
+    }
+
+    func testCloseTerminalTab_cleanupInvoked() async {
+        // Given
+        let connection = makeConnection()
+        sut.openTerminalTab(connection: connection, password: "p")
+        XCTAssertEqual(sut.tabs.count, 1)
+
+        // When
+        await sut.closeTab(at: 0)
+
+        // Then — tab removed, no crash (cleanup is idempotent)
+        XCTAssertEqual(sut.tabs.count, 0)
         XCTAssertNil(sut.activeTabIndex)
     }
 }

@@ -32,9 +32,14 @@ final class ConnectionListViewModelTests: XCTestCase {
             folderRepository: mockFolderRepository,
             keychainService: mockKeychainService,
             windowManager: mockWindowManager,
-            tabManager: TabManager(viewModelFactory: { _, _ in
-                fatalError("TabManager factory called in test — not expected")
-            })
+            tabManager: TabManager(
+                browserViewModelFactory: { _, _ in
+                    fatalError("TabManager factory called in test — not expected")
+                },
+                terminalViewModelFactory: { _, _ in
+                    fatalError("Terminal factory called in test — not expected")
+                }
+            )
         )
     }
 
@@ -150,9 +155,14 @@ final class ConnectionListViewModelTests: XCTestCase {
             folderRepository: mockFolderRepository,
             keychainService: mockKeychainService,
             windowManager: mockWindowManager,
-            tabManager: TabManager(viewModelFactory: { _, _ in
-                fatalError("Should not open tab on auth failure")
-            }),
+            tabManager: TabManager(
+                browserViewModelFactory: { _, _ in
+                    fatalError("Should not open tab on auth failure")
+                },
+                terminalViewModelFactory: { _, _ in
+                    fatalError("Terminal factory called in test — not expected")
+                }
+            ),
             makeSFTPSession: { mockSession }
         )
 
@@ -176,16 +186,21 @@ final class ConnectionListViewModelTests: XCTestCase {
         mockConnectionRepository.mockConnections = [connection]
 
         var openedConnections: [Connection] = []
-        let recordingTabManager = TabManager(viewModelFactory: { conn, password in
-            openedConnections.append(conn)
-            return FileBrowserViewModel(
-                connection: conn,
-                sftpSession: MockSFTPSession(),
-                fileRepository: MockFileRepository(),
-                clipboardService: ClipboardService.shared,
-                password: password
-            )
-        })
+        let recordingTabManager = TabManager(
+            browserViewModelFactory: { conn, password in
+                openedConnections.append(conn)
+                return FileBrowserViewModel(
+                    connection: conn,
+                    sftpSession: MockSFTPSession(),
+                    fileRepository: MockFileRepository(),
+                    clipboardService: ClipboardService.shared,
+                    password: password
+                )
+            },
+            terminalViewModelFactory: { _, _ in
+                fatalError("Terminal factory called in test — not expected")
+            }
+        )
 
         let testVM = ConnectionListViewModel(
             connectionRepository: mockConnectionRepository,
@@ -303,7 +318,10 @@ final class ConnectionListViewModelTests: XCTestCase {
             folderRepository: mockFolderRepository,
             keychainService: mockKeychainService,
             windowManager: mockWindowManager,
-            tabManager: TabManager(viewModelFactory: { _, _ in fatalError("not expected") }),
+            tabManager: TabManager(
+                browserViewModelFactory: { _, _ in fatalError("not expected") },
+                terminalViewModelFactory: { _, _ in fatalError("not expected") }
+            ),
             makeSFTPSession: { mockSession }
         )
 
@@ -325,7 +343,10 @@ final class ConnectionListViewModelTests: XCTestCase {
             folderRepository: mockFolderRepository,
             keychainService: mockKeychainService,
             windowManager: mockWindowManager,
-            tabManager: TabManager(viewModelFactory: { _, _ in fatalError("not expected") }),
+            tabManager: TabManager(
+                browserViewModelFactory: { _, _ in fatalError("not expected") },
+                terminalViewModelFactory: { _, _ in fatalError("not expected") }
+            ),
             makeSFTPSession: { mockSession }
         )
 
@@ -347,7 +368,10 @@ final class ConnectionListViewModelTests: XCTestCase {
             folderRepository: mockFolderRepository,
             keychainService: mockKeychainService,
             windowManager: mockWindowManager,
-            tabManager: TabManager(viewModelFactory: { _, _ in fatalError("not expected") })
+            tabManager: TabManager(
+                browserViewModelFactory: { _, _ in fatalError("not expected") },
+                terminalViewModelFactory: { _, _ in fatalError("not expected") }
+            )
         )
 
         // When

@@ -32,7 +32,10 @@ final class ConnectionSidebarTests: XCTestCase {
         capturedSessions = []
         mockSession = MockSFTPSession()
 
-        tabManager = TabManager(viewModelFactory: makeViewModel)
+        tabManager = TabManager(
+            browserViewModelFactory: makeViewModel,
+            terminalViewModelFactory: makeTerminalViewModel
+        )
 
         sut = ConnectionListViewModel(
             connectionRepository: mockConnectionRepository,
@@ -69,6 +72,24 @@ final class ConnectionSidebarTests: XCTestCase {
             fileRepository: repository,
             clipboardService: clipboard,
             password: password
+        )
+    }
+
+    private func makeTerminalViewModel(connection: Connection, password: String) -> TerminalViewModel {
+        let data = TerminalWindowData(
+            connectionId: connection.id,
+            connectionName: connection.name,
+            host: connection.host,
+            port: connection.port,
+            username: connection.username,
+            password: password,
+            authMethod: connection.authMethod,
+            privateKeyPath: connection.privateKeyPath
+        )
+        return TerminalViewModel(
+            connectionName: connection.name,
+            session: MockTerminalSession(),
+            connectionData: data
         )
     }
 

@@ -72,16 +72,6 @@ struct MacSCPApp: App {
         .defaultSize(WindowSize.fileInfo)
         .windowResizability(.contentSize)
 
-        // Terminal Window
-        WindowGroup(id: WindowID.terminal, for: String.self) { $windowId in
-            if let windowId = windowId {
-                TerminalWindow(windowId: windowId)
-                    .appLockOverlay()
-            }
-        }
-        .modelContainer(container.modelContainer)
-        .defaultSize(WindowSize.terminal)
-
         // Settings Window (Cmd+,)
         Settings {
             SettingsView()
