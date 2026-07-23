@@ -46,32 +46,75 @@ struct ConnectionSidebarView: View {
         .task {
             await viewModel.loadData()
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
+        .toolbar(id: "connectionSidebarToolbar") {
+            ToolbarItem(id: "openConnection", placement: .primaryAction) {
                 Button {
                     if let connection = viewModel.selectedConnection {
                         viewModel.connectToServer(connection)
                     }
                 } label: {
                     Label("Open Connection", systemImage: "arrow.right.square")
+                        .labelStyle(.iconOnly)
                 }
                 .help("Open selected connection")
                 .disabled(viewModel.selectedConnection == nil)
+            }
 
+            ToolbarItem(id: "newConnection", placement: .primaryAction) {
                 Button {
                     viewModel.isShowingNewConnectionSheet = true
                 } label: {
                     Label("New Connection", systemImage: "square.and.pencil")
+                        .labelStyle(.iconOnly)
                 }
                 .help("New Connection")
                 .accessibilityIdentifier("newConnectionButton")
+            }
 
+            ToolbarItem(id: "newFolder", placement: .primaryAction) {
                 Button {
                     viewModel.isShowingNewFolderSheet = true
                 } label: {
                     Label("New Folder", systemImage: "folder.badge.plus")
+                        .labelStyle(.iconOnly)
                 }
                 .help("New Folder")
+            }
+
+            ToolbarItem(id: "importSSHConfig", placement: .primaryAction) {
+                Button {
+                    viewModel.isShowingImportSheet = true
+                } label: {
+                    Label("Import SSH Config", systemImage: "square.and.arrow.down")
+                        .labelStyle(.iconOnly)
+                }
+                .help("Import SSH Config")
+                .accessibilityLabel("Import SSH config")
+                .accessibilityHint("Open the SSH config import sheet")
+            }
+
+            ToolbarItem(id: "importJSONConnections", placement: .primaryAction) {
+                Button {
+                    viewModel.isShowingJSONImportSheet = true
+                } label: {
+                    Label("Import Connections", systemImage: "square.and.arrow.down.on.square")
+                        .labelStyle(.iconOnly)
+                }
+                .help("Import Connections (JSON)")
+                .accessibilityLabel("Import connections")
+                .accessibilityHint("Open the JSON connections import sheet")
+            }
+
+            ToolbarItem(id: "exportConnections", placement: .primaryAction) {
+                Button {
+                    viewModel.isShowingExportChoice = true
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                        .labelStyle(.iconOnly)
+                }
+                .help("Export Connections")
+                .accessibilityLabel("Export connections")
+                .accessibilityHint("Choose to export all or the selected connection to JSON")
             }
         }
         // MARK: - Sheets
@@ -139,6 +182,54 @@ struct ConnectionSidebarView: View {
                     }
                 )
             }
+        }
+        .sheet(isPresented: $viewModel.isShowingImportSheet) {
+            let importViewModel = DependencyContainer.shared.makeSSHConfigImportViewModel(
+                existingConnections: viewModel.connections
+            )
+            SSHConfigImportSheet(viewModel: importViewModel)
+                .onAppear {
+                    importViewModel.onDismiss = {
+                        viewModel.isShowingImportSheet = false
+                    }
+                }
+        }
+        .onChange(of: viewModel.isShowingImportSheet) { _, isShowing in
+            if !isShowing {
+                Task { await viewModel.loadData() }
+            }
+        }
+        .sheet(isPresented: $viewModel.isShowingJSONImportSheet) {
+            let jsonImportViewModel = DependencyContainer.shared.makeJSONImportViewModel(
+                existingConnections: viewModel.connections
+            )
+            JSONImportSheet(viewModel: jsonImportViewModel)
+                .onAppear {
+                    jsonImportViewModel.onDismiss = {
+                        viewModel.isShowingJSONImportSheet = false
+                    }
+                }
+        }
+        .onChange(of: viewModel.isShowingJSONImportSheet) { _, isShowing in
+            if !isShowing {
+                Task { await viewModel.loadData() }
+            }
+        }
+        .confirmationDialog(
+            "Export Connections",
+            isPresented: $viewModel.isShowingExportChoice,
+            titleVisibility: .visible
+        ) {
+            Button("Export All (\(viewModel.connections.count))") {
+                viewModel.exportConnections(.all)
+            }
+            Button("Export Selected") {
+                viewModel.exportConnections(.selected)
+            }
+            .disabled(viewModel.selectedConnectionId == nil)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Choose whether to export all connections or only the selected one.")
         }
         // MARK: - Alerts
         .alert("New Folder", isPresented: $viewModel.isShowingNewFolderSheet) {
@@ -312,6 +403,11 @@ struct ConnectionSidebarView: View {
             .padding(.vertical, 4)
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // MARK: Accessibility (A11Y-03) — section headers are landmarks.
+            // .isHeader lets VoiceOver users landmark-jump Recent → Favorites
+            // → All Connections → folder headers (VO+Cmd+H).
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityLabel(title)
     }
 
     // MARK: - Connection Row
@@ -334,6 +430,30 @@ struct ConnectionSidebarView: View {
             connection.toNSItemProvider()
         }
         .accessibilityIdentifier("connectionRow_\(connection.name)")
+        // MARK: Accessibility (criterion #4) — pointer-free custom actions.
+        // Every context-menu operation below gets an equivalent
+        // .accessibilityAction(named:) so VoiceOver users reach them via the
+        // Actions menu (VO+Cmd+Space) without a mouse right-click. Each action
+        // invokes the EXACT SAME viewModel.* method as its context-menu
+        // counterpart — no parallel logic, no drift (T-4-06).
+        .accessibilityAction(named: "Connect") {
+            viewModel.connectToServer(connection)
+        }
+        .accessibilityAction(named: "Open Terminal") {
+            viewModel.requestTerminal(for: connection)
+        }
+        .accessibilityAction(named: "Edit") {
+            viewModel.editConnection(connection)
+        }
+        .accessibilityAction(named: "Duplicate") {
+            Task { await viewModel.duplicateConnection(connection) }
+        }
+        .accessibilityAction(named: connection.isFavorite ? "Remove from Favorites" : "Add to Favorites") {
+            Task { await viewModel.toggleFavorite(connection) }
+        }
+        .accessibilityAction(named: "Delete") {
+            Task { await viewModel.deleteConnection(connection) }
+        }
         .contextMenu {
                 Button {
                     viewModel.connectToServer(connection)

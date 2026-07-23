@@ -111,6 +111,31 @@ struct MacSCPApp: App {
                 connectionListViewModel.isShowingNewFolderSheet = true
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Import SSH Config...") {
+                connectionListViewModel.isShowingImportSheet = true
+            }
+            .keyboardShortcut("i", modifiers: [.command, .shift])
+
+            Button("Import Connections...") {
+                connectionListViewModel.isShowingJSONImportSheet = true
+            }
+            .keyboardShortcut("o", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Export All Connections…") {
+                connectionListViewModel.exportConnections(.all)
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+
+            Button("Export Selected Connection…") {
+                connectionListViewModel.exportConnections(.selected)
+            }
+            .keyboardShortcut("e", modifiers: [.command, .option, .shift])
+            .disabled(connectionListViewModel.selectedConnectionId == nil)
         }
 
         CommandGroup(after: .toolbar) {

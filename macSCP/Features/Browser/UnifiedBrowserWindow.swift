@@ -14,12 +14,25 @@ struct UnifiedBrowserWindow: View {
     var body: some View {
         NavigationSplitView {
             ConnectionSidebarView(viewModel: connectionListViewModel)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
+                .navigationSplitViewColumnWidth(min: 320, ideal: 360, max: 480)
+                // MARK: Accessibility (A11Y-03) — name the sidebar region.
+                // .contain (not .combine) keeps children navigable: users
+                // VO+Shift+↓ INTO the region to reach sidebar contents. The
+                // .accessibilityLabel makes VoiceOver announce
+                // "Connections, sidebar" instead of an unnamed region.
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Connections")
         } detail: {
             VStack(spacing: 0) {
                 TabBarView(tabManager: tabManager)
                 TabContentView(tabManager: tabManager)
             }
+            // MARK: Accessibility (A11Y-03) — name the detail region.
+            // Same .contain + label pattern as the sidebar; VoiceOver
+            // announces "File browser, content" and users move between the
+            // two regions with VO+Shift+↓/↑.
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("File browser")
         }
         .navigationSplitViewStyle(.balanced)
         .frame(

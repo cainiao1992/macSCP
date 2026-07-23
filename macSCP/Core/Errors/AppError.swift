@@ -53,6 +53,9 @@ enum AppError: LocalizedError, Sendable {
     case terminalConnectionLost
     case terminalPTYFailed
 
+    // Import errors
+    case importFailed(String)
+
     // Biometric errors
     case biometricNotAvailable
     case biometricAuthFailed(String)
@@ -132,6 +135,9 @@ enum AppError: LocalizedError, Sendable {
         case .terminalPTYFailed:
             return "Failed to allocate pseudo-terminal"
 
+        case .importFailed(let message):
+            return "Failed to import: \(message)"
+
         case .biometricNotAvailable:
             return "Touch ID is not available on this Mac"
         case .biometricAuthFailed(let message):
@@ -168,6 +174,8 @@ enum AppError: LocalizedError, Sendable {
             return "Please try again or use your system password."
         case .hostKeyMismatch:
             return "You can replace the stored key and reconnect, or disconnect. Only replace the key if you trust the new server."
+        case .importFailed:
+            return "Please check the file format and try again."
         default:
             return nil
         }

@@ -28,6 +28,49 @@ struct ConnectionRowView: View {
         }
     }
 
+    // MARK: - Accessibility
+
+    /// Composed spoken label for the entire row (A11Y-02).
+    ///
+    /// Joins the visible row fragments into ONE VoiceOver utterance so users
+    /// no longer swipe through name / host / type / tags / time separately.
+    ///
+    /// Security contract (threat T-4-04): this string MUST NOT contain any
+    /// credential. It draws ONLY from:
+    ///   - `connection.name` (user-chosen label)
+    ///   - `connection.connectionString` (`user@host` / `user@host:port` for
+    ///     SFTP, `s3://bucket` for S3 — verified in Connection.swift:105-115;
+    ///     contains NO password / private key / S3 secret)
+    ///   - `connection.connectionType.displayName` ("SFTP" / "S3")
+    ///   - optional status / favorite / last-used decoration
+    ///
+    /// `password`, `privateKeyPath`, `s3SecretAccessKey` are deliberately
+    /// absent. The credential-leak grep gate in 04-02-PLAN.md enforces this.
+    private var rowAccessibilityLabel: String {
+        var parts: [String] = [
+            connection.name,
+            connection.connectionString,
+            connection.connectionType.displayName,
+        ]
+        if let status = connectionStatus {
+            // ConnectionStatus has no displayName; map inline (A11Y spoken form).
+            let statusText: String
+            switch status {
+            case .online:   statusText = "Online"
+            case .offline:  statusText = "Offline"
+            case .checking: statusText = "Checking"
+            }
+            parts.append(statusText)
+        }
+        if connection.isFavorite {
+            parts.append("Favorite")
+        }
+        if let lastUsed = connection.lastUsedAt {
+            parts.append("Used \(lastUsed.relativeTimeString)")
+        }
+        return parts.joined(separator: ", ")
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: connection.iconName)
@@ -111,6 +154,15 @@ struct ConnectionRowView: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        // MARK: - Accessibility (A11Y-02)
+        // Flatten the 5+ Text/Image fragments into ONE VoiceOver element.
+        // Safe because the row body contains no interactive children — all
+        // tap/drag/context-menu interactivity is applied by the CALLER in
+        // ConnectionSidebarView.connectionRow(_:) (RESEARCH §Pitfall 6).
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(rowAccessibilityLabel)
+        .accessibilityHint("Double-tap to connect; open Actions menu for more")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .animation(.easeInOut(duration: 0.1), value: isSelected)
         .animation(.easeInOut(duration: 0.1), value: isHovered)
     }

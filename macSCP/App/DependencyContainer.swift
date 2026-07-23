@@ -172,6 +172,23 @@ final class DependencyContainer: ObservableObject {
         )
     }
 
+    func makeSSHConfigImportViewModel(existingConnections: [Connection]) -> SSHConfigImportViewModel {
+        SSHConfigImportViewModel(
+            parser: SSHConfigParser(),
+            connectionRepository: connectionRepository,
+            keychainService: keychainService,
+            existingConnections: existingConnections
+        )
+    }
+
+    func makeJSONImportViewModel(existingConnections: [Connection]) -> JSONImportViewModel {
+        JSONImportViewModel(
+            connectionRepository: connectionRepository,
+            keychainService: keychainService,
+            existingConnections: existingConnections
+        )
+    }
+
     private init() {
         logInfo("DependencyContainer initialized", category: .app)
     }

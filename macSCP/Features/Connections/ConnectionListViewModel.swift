@@ -7,10 +7,17 @@
 
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum SidebarSelection: Hashable, Sendable {
     case allConnections
     case folder(UUID)
+}
+
+/// Export scope for JSON connection export (EXP-02).
+enum ExportScope {
+    case all
+    case selected
 }
 
 enum TestConnectionState: Equatable {
@@ -43,6 +50,9 @@ final class ConnectionListViewModel {
     var isShowingNewFolderSheet = false
     var isShowingPasswordPrompt = false
     var isShowingDeleteFolderAlert = false
+    var isShowingImportSheet = false
+    var isShowingExportChoice = false
+    var isShowingJSONImportSheet = false
 
     // Editing state
     var connectionToEdit: Connection?
@@ -181,6 +191,62 @@ final class ConnectionListViewModel {
     var selectedFolder: Folder? {
         guard case .folder(let id) = selectedSidebarItem else { return nil }
         return folders.first { $0.id == id }
+    }
+
+    // MARK: - Export (EXP-01, EXP-02)
+
+    /// Exports connections to a JSON file via NSSavePanel.
+    ///
+    /// Security (T-6-01): the export path NEVER reads Keychain — it only reads
+    /// the already-loaded `connections` / `folders` models and encodes them via
+    /// `ConnectionExportCodec`. `Connection` has no password/s3Secret field, so
+    /// the resulting JSON is secret-free by construction (proven by
+    /// `testExport_containsNoSecretFields`).
+    func exportConnections(_ scope: ExportScope) {
+        let scoped: [Connection]
+        switch scope {
+        case .all:
+            scoped = connections
+        case .selected:
+            guard let selected = connections.first(where: { $0.id == selectedConnectionId }) else {
+                return
+            }
+            scoped = [selected]
+        }
+
+        guard !scoped.isEmpty else {
+            error = AppError.unknown("No connections to export")
+            return
+        }
+
+        let panel = NSSavePanel()
+        panel.title = "Export Connections"
+        panel.nameFieldStringValue = "macscp-connections.json"
+        panel.allowedContentTypes = [.json]
+        panel.canCreateDirectories = true
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let file = ConnectionExportFile(
+                version: ConnectionExportFile.currentVersion,
+                exportedAt: Date(),
+                appVersion: appVersionString(),
+                connections: scoped,
+                folders: folders
+            )
+            let data = try ConnectionExportCodec.encoder().encode(file)
+            try data.write(to: url, options: .atomic)
+            logInfo("Exported \(scoped.count) connections to \(url.path)", category: .database)
+        } catch {
+            logError("Failed to export connections: \(error)", category: .database)
+            self.error = AppError.from(error)
+        }
+    }
+
+    /// Reads the app's marketing version from the bundle for the export envelope.
+    private func appVersionString() -> String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
     }
 
     // MARK: - Data Loading

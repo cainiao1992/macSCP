@@ -115,6 +115,18 @@ struct ConnectionFormSheet: View {
                     }
                 }
 
+                // MARK: - Auto-Label Invariant (A11Y-01 / T-4-02)
+                // SwiftUI auto-derives the accessibility label from `TextField("Title", text:)`'s
+                // title parameter for every titled field below (Name/Host/Port/Username/
+                // Bucket/Region/Custom Endpoint/Access Key ID/Description/Private Key Path).
+                // Do NOT add `.accessibilityLabel` to these titled fields — it causes
+                // double-announcement ("Host, Host, text field"). Only the empty-title tag
+                // field and image-primary buttons carry explicit labels. The two SecureFields
+                // (Password, Secret Access Key) remain SecureFields — SwiftUI suppresses their
+                // spoken value; never reference $password/$s3SecretAccessKey/$privateKeyPath
+                // in any accessibility string (threat T-4-01).
+                // See 04-RESEARCH.md §Pitfall 1.
+
                 // Connection details based on type
                 Section("Connection") {
                     TextField("Name", text: $name)
@@ -182,6 +194,7 @@ struct ConnectionFormSheet: View {
                                 Button("Browse") {
                                     browseForKey()
                                 }
+                                .accessibilityLabel("Browse for private key")
                             }
                             if touched.contains(.privateKeyPath), let msg = fieldError(.privateKeyPath) {
                                 Text(msg).font(.caption).foregroundStyle(.red)
@@ -211,6 +224,8 @@ struct ConnectionFormSheet: View {
                                     .onSubmit {
                                         addTag()
                                     }
+                                    .accessibilityLabel("New tag")
+                                    .accessibilityHint("Type a tag and press Enter to add it")
                                 Button {
                                     addTag()
                                 } label: {
@@ -267,6 +282,7 @@ struct ConnectionFormSheet: View {
                 .buttonStyle(.bordered)
                 .disabled(!isValid || testConnectionState == .testing)
                 .accessibilityIdentifier("testConnectionButton")
+                .accessibilityValue(testConnectionStateAccessibilityValue)
 
                 Button(mode.saveButtonTitle) {
                     save()
@@ -281,6 +297,24 @@ struct ConnectionFormSheet: View {
         .frame(width: 500, height: 640)
         .onAppear {
             loadExistingData()
+        }
+    }
+
+    // MARK: - Accessibility
+
+    /// Spoken value for the Test Connection button, switching on dynamic state so
+    /// VoiceOver announces idle / testing / success / failure to the user
+    /// (RESEARCH.md §Example 3). Never references any credential.
+    private var testConnectionStateAccessibilityValue: String {
+        switch testConnectionState {
+        case .idle:
+            return isValid ? "Ready to test" : "Form incomplete"
+        case .testing:
+            return "Testing"
+        case .success:
+            return "Connection successful"
+        case .failure(let msg):
+            return "Failed: \(msg)"
         }
     }
 
@@ -302,6 +336,8 @@ struct ConnectionFormSheet: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 6)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Testing connection")
         case .success:
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle.fill")
@@ -313,6 +349,8 @@ struct ConnectionFormSheet: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 6)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Connection successful")
         case .failure(let msg):
             HStack(spacing: 8) {
                 Image(systemName: "xmark.circle.fill")
@@ -325,6 +363,8 @@ struct ConnectionFormSheet: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 6)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(msg)
         }
     }
 
@@ -520,6 +560,8 @@ struct IconPickerRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Select icon")
+            .accessibilityHint("Choose a custom icon for this connection")
             .popover(isPresented: $showingIconSelector, arrowEdge: .trailing) {
                 IconSelectorView(selectedIcon: $selectedIcon)
             }
@@ -556,6 +598,9 @@ struct TagChip: View {
         .onTapGesture {
             onRemove()
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Remove tag \(tag)")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
