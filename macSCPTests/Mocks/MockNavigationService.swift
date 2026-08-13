@@ -9,7 +9,7 @@ import Foundation
 @testable import macSCP
 
 @MainActor
-final class MockNavigationService {
+final class MockNavigationService: NavigationServiceProtocol {
     // MARK: - State
     private var history: [String] = []
     private var currentIndex: Int = -1

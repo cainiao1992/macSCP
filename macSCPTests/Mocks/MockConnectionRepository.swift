@@ -17,8 +17,6 @@ final class MockConnectionRepository: ConnectionRepositoryProtocol, @unchecked S
     var updateCalled = false
     var deleteCalled = false
     var moveCalled = false
-    var toggleFavoriteCalled = false
-    var updateLastUsedAtCalled = false
     var searchCalled = false
     var countCalled = false
 
@@ -30,8 +28,6 @@ final class MockConnectionRepository: ConnectionRepositoryProtocol, @unchecked S
     var lastDeletedId: UUID?
     var lastMoveConnectionId: UUID?
     var lastMoveFolderId: UUID?
-    var lastToggledFavoriteId: UUID?
-    var lastUpdatedLastUsedAtId: UUID?
     var lastSearchQuery: String?
 
     // MARK: - Mock Responses
@@ -96,8 +92,6 @@ final class MockConnectionRepository: ConnectionRepositoryProtocol, @unchecked S
     }
 
     func toggleFavorite(id: UUID) async throws {
-        toggleFavoriteCalled = true
-        lastToggledFavoriteId = id
         if let error = mockError { throw error }
         if let index = mockConnections.firstIndex(where: { $0.id == id }) {
             mockConnections[index].isFavorite.toggle()
@@ -105,8 +99,6 @@ final class MockConnectionRepository: ConnectionRepositoryProtocol, @unchecked S
     }
 
     func updateLastUsedAt(id: UUID) async throws {
-        updateLastUsedAtCalled = true
-        lastUpdatedLastUsedAtId = id
         if let error = mockError { throw error }
         if let index = mockConnections.firstIndex(where: { $0.id == id }) {
             mockConnections[index].lastUsedAt = Date()
@@ -144,8 +136,6 @@ final class MockConnectionRepository: ConnectionRepositoryProtocol, @unchecked S
         updateCalled = false
         deleteCalled = false
         moveCalled = false
-        toggleFavoriteCalled = false
-        updateLastUsedAtCalled = false
         searchCalled = false
         countCalled = false
 
@@ -156,8 +146,6 @@ final class MockConnectionRepository: ConnectionRepositoryProtocol, @unchecked S
         lastDeletedId = nil
         lastMoveConnectionId = nil
         lastMoveFolderId = nil
-        lastToggledFavoriteId = nil
-        lastUpdatedLastUsedAtId = nil
         lastSearchQuery = nil
 
         mockConnections = []

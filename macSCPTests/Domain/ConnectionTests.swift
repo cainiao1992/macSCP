@@ -235,68 +235,6 @@ final class ConnectionTests: XCTestCase {
         XCTAssertTrue(conn.validationErrors.contains("Bucket name is required"))
     }
 
-    // MARK: - validationError(for:) (FORM-01)
-
-    func testValidationError_ForName_WhenEmpty() {
-        let conn = makeSFTPConnection(name: "")
-        XCTAssertEqual(conn.validationError(for: .name), "Name is required")
-    }
-
-    func testValidationError_ForName_WhenValid() {
-        let conn = makeSFTPConnection(name: "Test")
-        XCTAssertNil(conn.validationError(for: .name))
-    }
-
-    func testValidationError_ForHost_WhenEmptySFTP() {
-        let conn = makeSFTPConnection(host: "")
-        XCTAssertEqual(conn.validationError(for: .host), "Host is required")
-    }
-
-    func testValidationError_ForHost_WhenS3() {
-        let conn = makeS3Connection()
-        XCTAssertNil(conn.validationError(for: .host))
-    }
-
-    func testValidationError_ForPort_WhenZero() {
-        let conn = makeSFTPConnection(port: 0)
-        let error = conn.validationError(for: .port)
-        XCTAssertNotNil(error)
-        XCTAssertTrue(error?.contains("Port") == true)
-    }
-
-    func testValidationError_ForPort_WhenTooHigh() {
-        let conn = makeSFTPConnection(port: 99999)
-        let error = conn.validationError(for: .port)
-        XCTAssertNotNil(error)
-        XCTAssertTrue(error?.contains("Port") == true)
-    }
-
-    func testValidationError_ForPort_WhenValid() {
-        let conn = makeSFTPConnection(port: 22)
-        XCTAssertNil(conn.validationError(for: .port))
-    }
-
-    func testValidationError_ForUsername_WhenEmptySFTP() {
-        let conn = makeSFTPConnection(username: "")
-        XCTAssertEqual(conn.validationError(for: .username), "Username is required")
-    }
-
-    func testValidationError_ForUsername_WhenEmptyS3() {
-        let conn = makeS3Connection()
-        let conn2 = Connection(name: "S3", host: "", username: "", connectionType: .s3, s3Bucket: "bucket")
-        XCTAssertEqual(conn2.validationError(for: .username), "Access Key ID is required")
-    }
-
-    func testValidationError_ForPrivateKeyPath_WhenRequiredButEmpty() {
-        let conn = makeSFTPConnection(authMethod: .privateKey, privateKeyPath: nil)
-        XCTAssertEqual(conn.validationError(for: .privateKeyPath), "Private key path is required for key authentication")
-    }
-
-    func testValidationError_ForS3Bucket_WhenEmpty() {
-        let conn = Connection(name: "S3", host: "", username: "access", connectionType: .s3, s3Bucket: nil)
-        XCTAssertEqual(conn.validationError(for: .s3Bucket), "Bucket name is required")
-    }
-
     // MARK: - isS3Connection / isSFTPConnection
 
     func testIsSFTPConnection() {

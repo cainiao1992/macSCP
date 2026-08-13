@@ -30,8 +30,8 @@ enum InactivityTimeout: Int, CaseIterable, Sendable, Identifiable {
 
 @MainActor
 @Observable
-final class AppLockManager {
-    static let shared = AppLockManager()
+final class AppLockManager: AppLockManagerProtocol {
+    static let shared = AppLockManager(biometricService: BiometricAuthService.shared)
 
     // MARK: - State
 
@@ -99,8 +99,8 @@ final class AppLockManager {
 
     // MARK: - Initialization
 
-    init(biometricService: BiometricAuthServiceProtocol? = nil) {
-        self.biometricService = biometricService ?? BiometricAuthService.shared
+    init(biometricService: BiometricAuthServiceProtocol) {
+        self.biometricService = biometricService
 
         // Load persisted preferences (didSet not called during init)
         self.isBiometricLockEnabled = UserDefaults.standard.bool(forKey: Keys.biometricLockEnabled)

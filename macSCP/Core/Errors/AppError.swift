@@ -53,12 +53,12 @@ enum AppError: LocalizedError, Sendable {
     case terminalConnectionLost
     case terminalPTYFailed
 
-    // Import errors
-    case importFailed(String)
-
     // Biometric errors
     case biometricNotAvailable
     case biometricAuthFailed(String)
+
+    // Import/export errors
+    case importFailed(String)
 
     // General errors
     case unknown(String)
@@ -135,9 +135,6 @@ enum AppError: LocalizedError, Sendable {
         case .terminalPTYFailed:
             return "Failed to allocate pseudo-terminal"
 
-        case .importFailed(let message):
-            return "Failed to import: \(message)"
-
         case .biometricNotAvailable:
             return "Touch ID is not available on this Mac"
         case .biometricAuthFailed(let message):
@@ -147,6 +144,8 @@ enum AppError: LocalizedError, Sendable {
             return message
         case .notConnected:
             return "Not connected to server"
+        case .importFailed(let message):
+            return "Import failed: \(message)"
         }
     }
 
@@ -174,10 +173,42 @@ enum AppError: LocalizedError, Sendable {
             return "Please try again or use your system password."
         case .hostKeyMismatch:
             return "You can replace the stored key and reconnect, or disconnect. Only replace the key if you trust the new server."
+        case .sftpOperationFailed:
+            return "Check that the file exists, the path is correct, and that you have the required permissions."
+        case .fileNotFound:
+            return "Confirm the file has not been moved or deleted, then refresh the list."
+        case .fileAlreadyExists:
+            return "Use a different name, or delete the existing file first."
+        case .directoryNotEmpty:
+            return "Delete the files inside the directory first, or force-delete the whole directory."
+        case .invalidPath:
+            return "Check that the path format is correct."
+        case .s3ObjectNotFound:
+            return "Confirm the object exists, or refresh the list."
+        case .s3OperationFailed:
+            return "Check the bucket permissions and your network, then try again."
+        case .saveFailed, .fetchFailed, .deleteFailed:
+            return "Please retry; if the problem persists, restart the app."
+        case .downloadFailed, .uploadFailed:
+            return "Check your network connection and available disk space, then try again."
+        case .fileReadFailed:
+            return "Confirm the file is not in use or corrupted."
+        case .fileWriteFailed:
+            return "Check that the destination has write permission and enough disk space."
+        case .unknown:
+            return "Please retry; if the problem persists, contact support with the error details."
+        case .connectionLost:
+            return "Reconnect to the server to resume the operation."
+        case .entityNotFound:
+            return "The item may have been removed. Refresh and try again."
+        case .keychainSaveFailed:
+            return "Check the keychain is unlocked and that you have permission to store items."
+        case .keychainReadFailed:
+            return "Unlock the keychain or re-enter your credentials to continue."
+        case .keychainDeleteFailed:
+            return "The stored credentials may need to be removed manually from Keychain Access."
         case .importFailed:
-            return "Please check the file format and try again."
-        default:
-            return nil
+            return "Check the file format and ensure it is a valid connection export."
         }
     }
 }
@@ -196,6 +227,42 @@ extension AppError {
         if let appError = error as? AppError {
             return appError
         }
+        if let urlError = error as? URLError {
+            return fromURLError(urlError)
+        }
+        if let nsError = error as NSError? {
+            if nsError.domain == "com.apple.security" || nsError.domain == "NSOSStatusErrorDomain" {
+                return fromKeychainStatus(nsError.code)
+            }
+            let domain = nsError.domain.lowercased()
+            if domain.contains("nio") || domain.contains("ssh") || domain.contains("libssh") {
+                return .sftpOperationFailed(error.localizedDescription)
+            }
+        }
         return .unknown(error.localizedDescription)
+    }
+
+    private static func fromURLError(_ error: URLError) -> AppError {
+        switch error.code {
+        case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed:
+            return .connectionLost
+        case .timedOut:
+            return .connectionTimeout
+        case .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+            return .hostUnreachable
+        default:
+            return .connectionFailed(error.localizedDescription)
+        }
+    }
+
+    private static func fromKeychainStatus(_ status: Int) -> AppError {
+        switch status {
+        case -25300: // errSecItemNotFound
+            return .entityNotFound
+        case -128:   // errSecUserCanceled
+            return .unknown("Operation cancelled")
+        default:
+            return .keychainReadFailed
+        }
     }
 }

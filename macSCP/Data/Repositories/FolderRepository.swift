@@ -12,8 +12,8 @@ final class FolderRepository: FolderRepositoryProtocol, @unchecked Sendable {
     private let dataStore: DataStore
 
     @MainActor
-    init(dataStore: DataStore? = nil) {
-        self.dataStore = dataStore ?? DataStore.shared
+    init(dataStore: DataStore) {
+        self.dataStore = dataStore
     }
 
     @MainActor

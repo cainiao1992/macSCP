@@ -14,6 +14,7 @@ final class FileBrowserViewModelTests: XCTestCase {
     var mockSFTPSession: MockSFTPSession!
     var mockFileRepository: MockFileRepository!
     var mockClipboardService: MockClipboardService!
+    var mockWindowManager: MockWindowManager!
 
     let testConnection = Connection(
         name: "Test Server",
@@ -26,6 +27,7 @@ final class FileBrowserViewModelTests: XCTestCase {
         mockSFTPSession = MockSFTPSession()
         mockFileRepository = MockFileRepository()
         mockClipboardService = MockClipboardService()
+        mockWindowManager = MockWindowManager()
 
         await mockSFTPSession.reset()
         await mockFileRepository.reset()
@@ -36,6 +38,7 @@ final class FileBrowserViewModelTests: XCTestCase {
             sftpSession: mockSFTPSession,
             fileRepository: mockFileRepository,
             clipboardService: mockClipboardService,
+            windowManager: mockWindowManager,
             password: "testpass"
         )
     }
@@ -46,6 +49,7 @@ final class FileBrowserViewModelTests: XCTestCase {
         mockSFTPSession = nil
         mockFileRepository = nil
         mockClipboardService = nil
+        mockWindowManager = nil
         try await super.tearDown()
     }
 
@@ -119,6 +123,7 @@ final class FileBrowserViewModelTests: XCTestCase {
             sftpSession: mockSFTPSession,
             fileRepository: mockFileRepository,
             clipboardService: mockClipboardService,
+            windowManager: mockWindowManager,
             password: "testpass"
         )
 

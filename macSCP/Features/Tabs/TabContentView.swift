@@ -12,22 +12,10 @@ struct TabContentView: View {
 
     var body: some View {
         if tabManager.hasTabs, let tab = tabManager.activeTab {
-            tabContent(for: tab)
+            FileBrowserView(viewModel: tab.viewModel)
                 .id(tab.id) // Force SwiftUI to recreate per tab — prevents view reuse across tab switches
         } else {
             emptyState
-        }
-    }
-
-    // MARK: - Tab Content
-
-    @ViewBuilder
-    private func tabContent(for tab: TabModel) -> some View {
-        switch tab.content {
-        case .fileBrowser(let viewModel):
-            FileBrowserView(viewModel: viewModel)
-        case .terminal(let viewModel):
-            TerminalContentView(viewModel: viewModel)
         }
     }
 

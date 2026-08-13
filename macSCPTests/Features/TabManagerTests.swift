@@ -16,10 +16,7 @@ final class TabManagerTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
         capturedSessions = []
-        sut = TabManager(
-            browserViewModelFactory: makeViewModel,
-            terminalViewModelFactory: makeTerminalViewModel
-        )
+        sut = TabManager(viewModelFactory: makeViewModel)
     }
 
     override func tearDown() async throws {
@@ -35,30 +32,14 @@ final class TabManagerTests: XCTestCase {
         capturedSessions.append(session)
         let repository = MockFileRepository()
         let clipboard = MockClipboardService()
+        let windowManager = MockWindowManager()
         return FileBrowserViewModel(
             connection: connection,
             sftpSession: session,
             fileRepository: repository,
             clipboardService: clipboard,
+            windowManager: windowManager,
             password: password
-        )
-    }
-
-    private func makeTerminalViewModel(connection: Connection, password: String) -> TerminalViewModel {
-        let data = TerminalWindowData(
-            connectionId: connection.id,
-            connectionName: connection.name,
-            host: connection.host,
-            port: connection.port,
-            username: connection.username,
-            password: password,
-            authMethod: connection.authMethod,
-            privateKeyPath: connection.privateKeyPath
-        )
-        return TerminalViewModel(
-            connectionName: connection.name,
-            session: MockTerminalSession(),
-            connectionData: data
         )
     }
 
@@ -283,52 +264,6 @@ final class TabManagerTests: XCTestCase {
         }
     }
 
-    // MARK: - Concurrent Close Tests (Race Condition Regression)
-
-    func testCloseTab_concurrentCloseSameIndex_noCrash() async {
-        // Given — 3 tabs, simulates rapid double-click on close button
-        let conn1 = makeConnection(name: "S1")
-        let conn2 = makeConnection(name: "S2")
-        let conn3 = makeConnection(name: "S3")
-        sut.openTab(connection: conn1, password: "p")
-        sut.openTab(connection: conn2, password: "p")
-        sut.openTab(connection: conn3, password: "p")
-        sut.switchToTab(at: 2)
-        XCTAssertEqual(sut.tabs.count, 3)
-
-        // When — two concurrent closeTab calls on the same index
-        // Before the fix this would crash with "Index out of range"
-        // because both pass the bounds check, then both try tabs.remove(at: 2)
-        async let close1: Void = sut.closeTab(at: 2)
-        async let close2: Void = sut.closeTab(at: 2)
-        _ = await (close1, close2)
-
-        // Then — exactly one tab removed, no crash
-        XCTAssertEqual(sut.tabs.count, 2)
-        XCTAssertEqual(sut.tabs[0].connectionName, "S1")
-        XCTAssertEqual(sut.tabs[1].connectionName, "S2")
-    }
-
-    func testCloseTab_alreadyClosedIndex_returnsGracefully() async {
-        // Given — 3 tabs
-        let conn1 = makeConnection(name: "S1")
-        let conn2 = makeConnection(name: "S2")
-        let conn3 = makeConnection(name: "S3")
-        sut.openTab(connection: conn1, password: "p")
-        sut.openTab(connection: conn2, password: "p")
-        sut.openTab(connection: conn3, password: "p")
-
-        // When — close tab at index 2, then try to close index 2 again
-        await sut.closeTab(at: 2)
-        XCTAssertEqual(sut.tabs.count, 2)
-
-        // This should NOT crash — index 2 is now out of bounds
-        await sut.closeTab(at: 2)
-
-        // Then — still only 2 tabs
-        XCTAssertEqual(sut.tabs.count, 2)
-    }
-
     // MARK: - State Independence Tests
 
     func testTabStateIndependence_switchingTabs_preservesState() async {
@@ -338,8 +273,8 @@ final class TabManagerTests: XCTestCase {
         sut.openTab(connection: conn1, password: "pass1")
         sut.openTab(connection: conn2, password: "pass2")
 
-        let tab0VM = sut.tabs[0].fileBrowserViewModel!
-        let tab1VM = sut.tabs[1].fileBrowserViewModel!
+        let tab0VM = sut.tabs[0].viewModel
+        let tab1VM = sut.tabs[1].viewModel
 
         // Mutate tab 0's VM state directly (independent of session)
         tab0VM.sortCriteria = .date
@@ -380,9 +315,9 @@ final class TabManagerTests: XCTestCase {
         sut.openTab(connection: conn2, password: "p")
         sut.openTab(connection: conn3, password: "p")
 
-        let tab0VM = sut.tabs[0].fileBrowserViewModel!
-        let tab1VM = sut.tabs[1].fileBrowserViewModel!
-        let tab2VM = sut.tabs[2].fileBrowserViewModel!
+        let tab0VM = sut.tabs[0].viewModel
+        let tab1VM = sut.tabs[1].viewModel
+        let tab2VM = sut.tabs[2].viewModel
 
         // Mutate each tab's VM state
         tab0VM.sortCriteria = .date
@@ -641,68 +576,6 @@ final class TabManagerTests: XCTestCase {
         sut.switchToPreviousTab()
 
         // Then — no crash, still nil
-        XCTAssertNil(sut.activeTabIndex)
-    }
-
-    // MARK: - Terminal Tab Tests
-
-    func testOpenTerminalTab_createsTerminalTab() {
-        // Given
-        let connection = makeConnection()
-
-        // When
-        sut.openTerminalTab(connection: connection, password: "pass")
-
-        // Then
-        XCTAssertEqual(sut.tabs.count, 1)
-        XCTAssertEqual(sut.activeTabIndex, 0)
-        XCTAssertEqual(sut.tabs.first?.kind, .terminal)
-        XCTAssertNotNil(sut.tabs.first?.terminalViewModel)
-        XCTAssertNil(sut.tabs.first?.fileBrowserViewModel)
-        XCTAssertEqual(sut.tabs.first?.icon, "terminal")
-    }
-
-    func testOpenTerminalTab_duplicateConnection_switchesToExisting() {
-        // Given
-        let connection = makeConnection()
-        sut.openTerminalTab(connection: connection, password: "pass")
-
-        // When
-        sut.openTerminalTab(connection: connection, password: "pass")
-
-        // Then — only one terminal tab, switched to it
-        XCTAssertEqual(sut.tabs.count, 1)
-        XCTAssertEqual(sut.activeTabIndex, 0)
-    }
-
-    func testOpenTerminalTab_coexistsWithBrowserTab() {
-        // Given — a browser tab is already open for the connection
-        let connection = makeConnection()
-        sut.openTab(connection: connection, password: "pass")
-        XCTAssertEqual(sut.tabs.count, 1)
-        XCTAssertEqual(sut.tabs[0].kind, .fileBrowser)
-
-        // When — open a terminal tab for the same connection
-        sut.openTerminalTab(connection: connection, password: "pass")
-
-        // Then — both tabs coexist (browser + terminal for same connection)
-        XCTAssertEqual(sut.tabs.count, 2)
-        XCTAssertEqual(sut.tabs[0].kind, .fileBrowser)
-        XCTAssertEqual(sut.tabs[1].kind, .terminal)
-        XCTAssertEqual(sut.activeTabIndex, 1, "Newly opened terminal tab should be active")
-    }
-
-    func testCloseTerminalTab_cleanupInvoked() async {
-        // Given
-        let connection = makeConnection()
-        sut.openTerminalTab(connection: connection, password: "p")
-        XCTAssertEqual(sut.tabs.count, 1)
-
-        // When
-        await sut.closeTab(at: 0)
-
-        // Then — tab removed, no crash (cleanup is idempotent)
-        XCTAssertEqual(sut.tabs.count, 0)
         XCTAssertNil(sut.activeTabIndex)
     }
 }

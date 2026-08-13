@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @State private var appLockManager = AppLockManager.shared
-    private let biometricService: BiometricAuthServiceProtocol = BiometricAuthService.shared
+    @Environment(\.appLockManager) private var appLockManager
+    @Environment(\.biometricService) private var biometricService
 
     private var isBiometricAvailable: Bool {
         biometricService.isBiometricAvailable()

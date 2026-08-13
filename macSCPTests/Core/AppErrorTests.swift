@@ -242,16 +242,19 @@ final class AppErrorTests: XCTestCase {
         XCTAssertTrue(desc?.contains("try again") ?? false)
     }
 
-    func testRecoverySuggestion_SftpOperationFailed_Nil() {
-        XCTAssertNil(AppError.sftpOperationFailed("test").recoverySuggestion)
+    func testRecoverySuggestion_SftpOperationFailed() {
+        let desc = AppError.sftpOperationFailed("test").recoverySuggestion
+        XCTAssertTrue(desc?.contains("file exists") ?? false)
     }
 
-    func testRecoverySuggestion_FileNotFound_Nil() {
-        XCTAssertNil(AppError.fileNotFound.recoverySuggestion)
+    func testRecoverySuggestion_FileNotFound() {
+        let desc = AppError.fileNotFound.recoverySuggestion
+        XCTAssertTrue(desc?.contains("moved or deleted") ?? false)
     }
 
-    func testRecoverySuggestion_Unknown_Nil() {
-        XCTAssertNil(AppError.unknown("test").recoverySuggestion)
+    func testRecoverySuggestion_Unknown() {
+        let desc = AppError.unknown("test").recoverySuggestion
+        XCTAssertTrue(desc?.contains("retry") ?? false)
     }
 
     // MARK: - errorDescription: Host Key Mismatch
@@ -321,6 +324,85 @@ final class AppErrorTests: XCTestCase {
             XCTAssertEqual(message, "ns error")
         } else {
             XCTFail("Expected .unknown case")
+        }
+    }
+
+    // MARK: - from(_:): URLError mapping
+
+    func testFrom_URLErrorTimedOutMapsToConnectionTimeout() {
+        let error = URLError(.timedOut)
+        let result = AppError.from(error)
+        guard case .connectionTimeout = result else {
+            return XCTFail("Expected connectionTimeout")
+        }
+    }
+
+    func testFrom_URLErrorNotConnectedMapsToConnectionLost() {
+        let error = URLError(.notConnectedToInternet)
+        let result = AppError.from(error)
+        guard case .connectionLost = result else {
+            return XCTFail("Expected connectionLost")
+        }
+    }
+
+    func testFrom_URLErrorCannotConnectMapsToHostUnreachable() {
+        let error = URLError(.cannotConnectToHost)
+        let result = AppError.from(error)
+        guard case .hostUnreachable = result else {
+            return XCTFail("Expected hostUnreachable")
+        }
+    }
+
+    func testFrom_URLErrorUnknownMapsToConnectionFailed() {
+        let error = URLError(.badServerResponse)
+        let result = AppError.from(error)
+        guard case .connectionFailed = result else {
+            return XCTFail("Expected connectionFailed")
+        }
+    }
+
+    // MARK: - from(_:): Keychain OSStatus mapping
+
+    func testFrom_KeychainItemNotFoundMapsToEntityNotFound() {
+        let error = NSError(domain: "com.apple.security", code: -25300)
+        let result = AppError.from(error)
+        guard case .entityNotFound = result else {
+            return XCTFail("Expected entityNotFound")
+        }
+    }
+
+    func testFrom_KeychainUserCanceledMapsToCancelledUnknown() {
+        let error = NSError(domain: "com.apple.security", code: -128)
+        let result = AppError.from(error)
+        guard case .unknown(let message) = result else {
+            return XCTFail("Expected unknown")
+        }
+        XCTAssertEqual(message, "Operation cancelled")
+    }
+
+    func testFrom_KeychainOtherStatusMapsToKeychainReadFailed() {
+        let error = NSError(domain: "com.apple.security", code: -25293)
+        let result = AppError.from(error)
+        guard case .keychainReadFailed = result else {
+            return XCTFail("Expected keychainReadFailed")
+        }
+    }
+
+    // MARK: - from(_:): NIO / SSH domain mapping
+
+    func testFrom_NIOErrorMapsToSftpOperationFailed() {
+        let error = NSError(domain: "NIOSSH", code: 1, userInfo: [NSLocalizedDescriptionKey: "handshake failed"])
+        let result = AppError.from(error)
+        guard case .sftpOperationFailed = result else {
+            return XCTFail("Expected sftpOperationFailed")
+        }
+    }
+
+    func testFrom_LibsshErrorMapsToSftpOperationFailed() {
+        let error = NSError(domain: "libssh", code: 1, userInfo: [NSLocalizedDescriptionKey: "auth failed"])
+        let result = AppError.from(error)
+        guard case .sftpOperationFailed = result else {
+            return XCTFail("Expected sftpOperationFailed")
         }
     }
 }

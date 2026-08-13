@@ -23,6 +23,7 @@ enum WindowID {
     static let fileBrowser = "file-browser"
     static let fileEditor = "file-editor"
     static let fileInfo = "file-info"
+    static let terminal = "terminal"
 }
 
 // MARK: - Window Sizes
@@ -31,6 +32,7 @@ enum WindowSize {
     static let fileBrowser = CGSize(width: 1000, height: 700)
     static let fileEditor = CGSize(width: 800, height: 600)
     static let fileInfo = CGSize(width: 300, height: 400)
+    static let terminal = CGSize(width: 1280, height: 1024)
     static let minMain = CGSize(width: 700, height: 450)
     static let minFileBrowser = CGSize(width: 600, height: 400)
     static let minTerminal = CGSize(width: 400, height: 250)

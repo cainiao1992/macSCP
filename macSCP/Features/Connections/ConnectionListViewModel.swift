@@ -58,25 +58,54 @@ final class ConnectionListViewModel {
     var connectionToEdit: Connection?
     var connectionToConnect: Connection?
     var folderToDelete: Folder?
+    var pendingTerminalWindowId: String?
 
     // MARK: - Dependencies
     private let connectionRepository: ConnectionRepositoryProtocol
     private let folderRepository: FolderRepositoryProtocol
     private let keychainService: KeychainServiceProtocol
-    private let windowManager: WindowManager
+    private let windowManager: any WindowManagerProtocol
     private let tabManager: TabManager
+    private let appLockManager: any AppLockManagerProtocol
     private let makeSFTPSession: () -> any SFTPSessionProtocol
     private let makeS3Session: () -> any S3SessionProtocol
     static let testConnectionTimeout: Duration = .seconds(15)
     private let connectivityService: ConnectivityService
+
+    // MARK: - Sub-components (coordinators)
+    @ObservationIgnored
+    private lazy var connectionInitiator: ConnectionInitiator = {
+        ConnectionInitiator(
+            keychainService: keychainService,
+            windowManager: windowManager,
+            tabManager: tabManager,
+            appLockManager: appLockManager,
+            getConnectionToConnect: { [weak self] in self?.connectionToConnect },
+            onSetConnectionToConnect: { [weak self] conn in self?.connectionToConnect = conn },
+            onShowPasswordPrompt: { [weak self] show in self?.isShowingPasswordPrompt = show },
+            onSetPendingTerminalWindowId: { _ in }
+        )
+    }()
+
+    @ObservationIgnored
+    private lazy var crudCoordinator: ConnectionCRUDCoordinator = {
+        ConnectionCRUDCoordinator(
+            connectionRepository: connectionRepository,
+            keychainService: keychainService,
+            onReloadData: { [weak self] in await self?.loadData() },
+            onError: { [weak self] error in self?.error = error },
+            onConnectionMoved: { _, _ in }
+        )
+    }()
 
     // MARK: - Initialization
     init(
         connectionRepository: ConnectionRepositoryProtocol,
         folderRepository: FolderRepositoryProtocol,
         keychainService: KeychainServiceProtocol,
-        windowManager: WindowManager,
+        windowManager: any WindowManagerProtocol,
         tabManager: TabManager,
+        appLockManager: any AppLockManagerProtocol,
         makeSFTPSession: (() -> any SFTPSessionProtocol)? = nil,
         makeS3Session: (() -> any S3SessionProtocol)? = nil,
         connectivityService: ConnectivityService? = nil
@@ -86,6 +115,7 @@ final class ConnectionListViewModel {
         self.keychainService = keychainService
         self.windowManager = windowManager
         self.tabManager = tabManager
+        self.appLockManager = appLockManager
         self.makeSFTPSession = makeSFTPSession ?? { DependencyContainer.shared.makeSFTPSession() }
         self.makeS3Session = makeS3Session ?? { DependencyContainer.shared.makeS3Session() }
         self.connectivityService = connectivityService ?? ConnectivityService.shared
@@ -479,7 +509,7 @@ final class ConnectionListViewModel {
 
         Task { @MainActor in
             // Gate connection behind biometric auth if configured
-            let allowed = await AppLockManager.shared.authenticateForConnection()
+            let allowed = await appLockManager.authenticateForConnection()
             guard allowed else {
                 logInfo("Connection cancelled: biometric auth denied", category: .auth)
                 return
@@ -654,6 +684,10 @@ final class ConnectionListViewModel {
         // No-op: tabs are opened directly via TabManager
     }
 
+    func clearPendingTerminalWindow() {
+        pendingTerminalWindowId = nil
+    }
+
     // MARK: - Terminal Operations
 
     func openTerminal(for connection: Connection, password: String) {
@@ -663,7 +697,7 @@ final class ConnectionListViewModel {
             return
         }
 
-        tabManager.openTerminalTab(connection: connection, password: password)
+        tabManager.openTab(connection: connection, password: password)
         logInfo("Opened terminal tab for connection: \(connection.name)", category: .ui)
     }
 
@@ -675,7 +709,7 @@ final class ConnectionListViewModel {
 
         Task { @MainActor in
             // Gate terminal behind biometric auth if configured
-            let allowed = await AppLockManager.shared.authenticateForConnection()
+            let allowed = await appLockManager.authenticateForConnection()
             guard allowed else {
                 logInfo("Terminal cancelled: biometric auth denied", category: .auth)
                 return

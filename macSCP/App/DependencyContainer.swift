@@ -87,7 +87,8 @@ final class DependencyContainer: ObservableObject {
             folderRepository: folderRepository,
             keychainService: keychainService,
             windowManager: windowManager,
-            tabManager: tabManager
+            tabManager: tabManager,
+            appLockManager: appLockManager
         )
     }
 
@@ -102,6 +103,7 @@ final class DependencyContainer: ObservableObject {
             sftpSession: sftpSession,
             fileRepository: fileRepository,
             clipboardService: clipboardService,
+            windowManager: windowManager,
             password: password
         )
     }
@@ -117,6 +119,7 @@ final class DependencyContainer: ObservableObject {
             s3Session: s3Session,
             fileRepository: fileRepository,
             clipboardService: clipboardService,
+            windowManager: windowManager,
             secretAccessKey: secretAccessKey
         )
     }
@@ -156,6 +159,56 @@ final class DependencyContainer: ObservableObject {
         )
     }
 
+    /// Encapsulates the session-creation + connect logic needed by
+    /// FileEditorWindow, so the Window itself never reaches into the container.
+    /// Returns the file repository plus the live S3/SFTP session (whichever
+    /// branch was taken) so the editor can clean it up on close.
+    func makeFileEditorDependencies(
+        for data: FileEditorWindowData
+    ) async throws -> (FileRepositoryProtocol, S3SessionProtocol?, SFTPSessionProtocol?) {
+        let fileRepository: FileRepositoryProtocol
+        var s3Session: S3SessionProtocol?
+        var sftpSession: SFTPSessionProtocol?
+
+        if data.connectionType == .s3 {
+            // S3 connection
+            let session = makeS3Session()
+            try await session.connect(
+                accessKeyId: data.username,
+                secretAccessKey: data.password,
+                region: data.s3Region ?? "us-east-1",
+                bucket: data.s3Bucket ?? "",
+                endpoint: data.s3Endpoint
+            )
+            fileRepository = makeS3FileRepository(session: session)
+            s3Session = session
+        } else {
+            // SFTP connection
+            let session = makeSFTPSession(privateKeyPath: data.privateKeyPath)
+            switch data.authMethod {
+            case .password:
+                try await session.connect(
+                    host: data.host,
+                    port: data.port,
+                    username: data.username,
+                    password: data.password
+                )
+            case .privateKey:
+                try await session.connect(
+                    host: data.host,
+                    port: data.port,
+                    username: data.username,
+                    privateKeyPath: data.privateKeyPath ?? "",
+                    passphrase: data.password.isEmpty ? nil : data.password
+                )
+            }
+            fileRepository = makeFileRepository(session: session)
+            sftpSession = session
+        }
+
+        return (fileRepository, s3Session, sftpSession)
+    }
+
     func makeFileInfoViewModel(file: RemoteFile, connectionName: String) -> FileInfoViewModel {
         FileInfoViewModel(file: file, connectionName: connectionName)
     }
@@ -169,43 +222,6 @@ final class DependencyContainer: ObservableObject {
             connectionName: connectionName,
             session: session,
             connectionData: connectionData
-        )
-    }
-
-    /// Convenience factory for terminal tabs: builds TerminalWindowData + session from a connection.
-    func makeTerminalViewModel(connection: Connection, password: String) -> TerminalViewModel {
-        let data = TerminalWindowData(
-            connectionId: connection.id,
-            connectionName: connection.name,
-            host: connection.host,
-            port: connection.port,
-            username: connection.username,
-            password: password,
-            authMethod: connection.authMethod,
-            privateKeyPath: connection.privateKeyPath
-        )
-        let session = makeTerminalSession(connectionData: data)
-        return makeTerminalViewModel(
-            connectionName: connection.name,
-            session: session,
-            connectionData: data
-        )
-    }
-
-    func makeSSHConfigImportViewModel(existingConnections: [Connection]) -> SSHConfigImportViewModel {
-        SSHConfigImportViewModel(
-            parser: SSHConfigParser(),
-            connectionRepository: connectionRepository,
-            keychainService: keychainService,
-            existingConnections: existingConnections
-        )
-    }
-
-    func makeJSONImportViewModel(existingConnections: [Connection]) -> JSONImportViewModel {
-        JSONImportViewModel(
-            connectionRepository: connectionRepository,
-            keychainService: keychainService,
-            existingConnections: existingConnections
         )
     }
 

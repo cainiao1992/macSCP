@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct AppLockView: View {
-    @State private var appLockManager = AppLockManager.shared
+    @Environment(\.appLockManager) private var appLockManager
 
     var body: some View {
         VStack(spacing: 20) {

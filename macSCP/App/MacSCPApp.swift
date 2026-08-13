@@ -23,7 +23,7 @@ struct MacSCPApp: App {
         self._connectionListViewModel = State(initialValue: container.makeConnectionListViewModel())
 
         AnalyticsService.initialize()
-        AppLockManager.shared.lockIfNeeded()
+        container.appLockManager.lockIfNeeded()
 
         let controller = SPUStandardUpdaterController(
             startingUpdater: true,
@@ -44,6 +44,9 @@ struct MacSCPApp: App {
                 connectionListViewModel: connectionListViewModel
             )
             .appLockOverlay()
+                .environment(\.appLockManager, container.appLockManager)
+                .environment(\.windowManager, container.windowManager)
+                .environment(\.biometricService, BiometricAuthService.shared)
         }
         .modelContainer(container.modelContainer)
         .defaultSize(WindowSize.fileBrowser)
@@ -56,6 +59,11 @@ struct MacSCPApp: App {
             if let windowId = windowId {
                 FileEditorWindow(windowId: windowId)
                     .appLockOverlay()
+                    .environment(\.appLockManager, container.appLockManager)
+                    .environment(\.windowManager, container.windowManager)
+                    .environment(\.makeFileEditorDependencies, { data in
+                        try await container.makeFileEditorDependencies(for: data)
+                    })
             }
         }
         .modelContainer(container.modelContainer)
@@ -66,16 +74,34 @@ struct MacSCPApp: App {
             if let windowId = windowId {
                 FileInfoWindow(windowId: windowId)
                     .appLockOverlay()
+                    .environment(\.appLockManager, container.appLockManager)
+                    .environment(\.windowManager, container.windowManager)
             }
         }
         .modelContainer(container.modelContainer)
         .defaultSize(WindowSize.fileInfo)
         .windowResizability(.contentSize)
 
+        // Terminal Window
+        WindowGroup(id: WindowID.terminal, for: String.self) { $windowId in
+            if let windowId = windowId {
+                TerminalWindow(windowId: windowId)
+                    .appLockOverlay()
+                    .environment(\.appLockManager, container.appLockManager)
+                    .environment(\.windowManager, container.windowManager)
+                    .environment(\.makeTerminalSession, { container.makeTerminalSession(connectionData: $0) })
+                    .environment(\.makeTerminalViewModel, { container.makeTerminalViewModel(connectionName: $0, session: $1, connectionData: $2) })
+            }
+        }
+        .modelContainer(container.modelContainer)
+        .defaultSize(WindowSize.terminal)
+
         // Settings Window (Cmd+,)
         Settings {
             SettingsView()
                 .appLockOverlay()
+                .environment(\.appLockManager, container.appLockManager)
+                .environment(\.biometricService, BiometricAuthService.shared)
         }
     }
 
@@ -101,31 +127,6 @@ struct MacSCPApp: App {
                 connectionListViewModel.isShowingNewFolderSheet = true
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
-
-            Divider()
-
-            Button("Import SSH Config...") {
-                connectionListViewModel.isShowingImportSheet = true
-            }
-            .keyboardShortcut("i", modifiers: [.command, .shift])
-
-            Button("Import Connections...") {
-                connectionListViewModel.isShowingJSONImportSheet = true
-            }
-            .keyboardShortcut("o", modifiers: [.command, .shift])
-
-            Divider()
-
-            Button("Export All Connections…") {
-                connectionListViewModel.exportConnections(.all)
-            }
-            .keyboardShortcut("e", modifiers: [.command, .shift])
-
-            Button("Export Selected Connection…") {
-                connectionListViewModel.exportConnections(.selected)
-            }
-            .keyboardShortcut("e", modifiers: [.command, .option, .shift])
-            .disabled(connectionListViewModel.selectedConnectionId == nil)
         }
 
         CommandGroup(after: .toolbar) {
@@ -157,7 +158,7 @@ struct MacSCPApp: App {
 
         CommandGroup(replacing: .help) {
             Button("Report a Bug…") {
-                if let url = URL(string: "https://github.com/macnev2013/macSCP/issues") {
+                if let url = URL(string: "https://github.com/cainiao1992/macSCP/issues") {
                     NSWorkspace.shared.open(url)
                 }
             }

@@ -104,6 +104,12 @@ struct FileBrowserView: View {
                     viewModel.clearPendingEditorWindow()
                 }
             }
+            .onChange(of: viewModel.pendingTerminalWindowId) { _, windowId in
+                if let windowId = windowId {
+                    openWindow(id: WindowID.terminal, value: windowId)
+                    viewModel.clearPendingTerminalWindow()
+                }
+            }
     }
     
     private var browserChrome: some View {

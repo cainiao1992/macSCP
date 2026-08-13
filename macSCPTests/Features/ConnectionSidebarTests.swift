@@ -18,24 +18,21 @@ final class ConnectionSidebarTests: XCTestCase {
     var mockConnectionRepository: MockConnectionRepository!
     var mockFolderRepository: MockFolderRepository!
     var mockKeychainService: MockKeychainService!
-    var mockWindowManager: WindowManager!
+    var mockWindowManager: MockWindowManager!
+    var mockAppLockManager: MockAppLockManager!
     var tabManager: TabManager!
     var capturedSessions: [MockSFTPSession] = []
-    var mockSession: MockSFTPSession!
 
     override func setUp() async throws {
         try await super.setUp()
         mockConnectionRepository = MockConnectionRepository()
         mockFolderRepository = MockFolderRepository()
         mockKeychainService = MockKeychainService()
-        mockWindowManager = WindowManager.shared
+        mockWindowManager = MockWindowManager()
+        mockAppLockManager = MockAppLockManager()
         capturedSessions = []
-        mockSession = MockSFTPSession()
 
-        tabManager = TabManager(
-            browserViewModelFactory: makeViewModel,
-            terminalViewModelFactory: makeTerminalViewModel
-        )
+        tabManager = TabManager(viewModelFactory: makeViewModel)
 
         sut = ConnectionListViewModel(
             connectionRepository: mockConnectionRepository,
@@ -43,7 +40,7 @@ final class ConnectionSidebarTests: XCTestCase {
             keychainService: mockKeychainService,
             windowManager: mockWindowManager,
             tabManager: tabManager,
-            makeSFTPSession: { self.mockSession }
+            appLockManager: mockAppLockManager
         )
     }
 
@@ -53,8 +50,8 @@ final class ConnectionSidebarTests: XCTestCase {
         mockFolderRepository = nil
         mockKeychainService = nil
         mockWindowManager = nil
+        mockAppLockManager = nil
         tabManager = nil
-        mockSession = nil
         capturedSessions = []
         try await super.tearDown()
     }
@@ -71,25 +68,8 @@ final class ConnectionSidebarTests: XCTestCase {
             sftpSession: session,
             fileRepository: repository,
             clipboardService: clipboard,
+            windowManager: mockWindowManager,
             password: password
-        )
-    }
-
-    private func makeTerminalViewModel(connection: Connection, password: String) -> TerminalViewModel {
-        let data = TerminalWindowData(
-            connectionId: connection.id,
-            connectionName: connection.name,
-            host: connection.host,
-            port: connection.port,
-            username: connection.username,
-            password: password,
-            authMethod: connection.authMethod,
-            privateKeyPath: connection.privateKeyPath
-        )
-        return TerminalViewModel(
-            connectionName: connection.name,
-            session: MockTerminalSession(),
-            connectionData: data
         )
     }
 
@@ -105,15 +85,16 @@ final class ConnectionSidebarTests: XCTestCase {
 
     /// When calling connectWithPassword, the VM should open a tab via TabManager
     /// with the correct connection and password.
-    func testConnectToServer_opensTab() async {
+    func testConnectToServer_opensTab() {
         // Given
         let connection = makeConnection(name: "My Server", host: "myserver.com")
+        let savedPassword = "s3cret"
 
+        // Set connectionToConnect (normally done by connectToServer after auth gate)
         sut.connectionToConnect = connection
-        sut.isShowingPasswordPrompt = true
 
         // When
-        await sut.attemptConnect(connection, password: "s3cret")
+        sut.connectWithPassword(savedPassword)
 
         // Then — TabManager received the call
         XCTAssertEqual(tabManager.tabs.count, 1, "Should have opened exactly one tab")
@@ -129,7 +110,7 @@ final class ConnectionSidebarTests: XCTestCase {
 
     /// When connecting to a connection that already has an open tab,
     /// TabManager should deduplicate: switch to existing tab, not create a new one.
-    func testConnectToServer_duplicateConnection_switchesToExisting() async {
+    func testConnectToServer_duplicateConnection_switchesToExisting() {
         // Given — open a tab for this connection via TabManager directly
         let connection = makeConnection(name: "Existing Server", host: "existing.com")
         tabManager.openTab(connection: connection, password: "old-pass")
@@ -140,7 +121,7 @@ final class ConnectionSidebarTests: XCTestCase {
 
         // When — connect to the same connection again via VM
         sut.connectionToConnect = connection
-        await sut.attemptConnect(connection, password: "new-pass")
+        sut.connectWithPassword("new-pass")
 
         // Then — openTab was called but TabManager deduplicates
         XCTAssertEqual(tabManager.tabs.count, 1, "Should still have only 1 tab (no duplicate)")
@@ -151,7 +132,7 @@ final class ConnectionSidebarTests: XCTestCase {
 
     /// Opening tabs for 3 different connections should result in 3 tabs,
     /// with the last one being active.
-    func testConnectToServer_multipleConnections() async {
+    func testConnectToServer_multipleConnections() {
         // Given
         let conn1 = makeConnection(name: "Server A", host: "a.example.com")
         let conn2 = makeConnection(name: "Server B", host: "b.example.com")
@@ -159,13 +140,13 @@ final class ConnectionSidebarTests: XCTestCase {
 
         // When — connect to all three sequentially via VM
         sut.connectionToConnect = conn1
-        await sut.attemptConnect(conn1, password: "pass1")
+        sut.connectWithPassword("pass1")
 
         sut.connectionToConnect = conn2
-        await sut.attemptConnect(conn2, password: "pass2")
+        sut.connectWithPassword("pass2")
 
         sut.connectionToConnect = conn3
-        await sut.attemptConnect(conn3, password: "pass3")
+        sut.connectWithPassword("pass3")
 
         // Then — 3 tabs exist, last is active
         XCTAssertEqual(tabManager.tabs.count, 3, "Should have opened 3 tabs")
@@ -196,13 +177,13 @@ final class ConnectionSidebarTests: XCTestCase {
 
     /// Private key auth connections should open a tab with an empty password
     /// (no password prompt needed).
-    func testPrivateKeyAuth_opensTabWithEmptyPassword() async {
+    func testPrivateKeyAuth_opensTabWithEmptyPassword() {
         // Given — create a connection with private key auth
         let connection = makeConnection(name: "Key Server", host: "key.example.com", authMethod: .privateKey)
 
         // When
         sut.connectionToConnect = connection
-        await sut.attemptConnect(connection, password: "")
+        sut.connectWithPassword("")
 
         // Then
         XCTAssertEqual(tabManager.tabs.count, 1)
@@ -212,7 +193,7 @@ final class ConnectionSidebarTests: XCTestCase {
     // MARK: - S3 Connection Tests
 
     /// S3 connections should open a tab with the correct connection type.
-    func testS3Connection_opensTabWithCorrectType() async {
+    func testS3Connection_opensTabWithCorrectType() {
         // Given
         var connection = makeConnection(name: "S3 Bucket", host: "s3.amazonaws.com")
         connection.connectionType = .s3
@@ -220,7 +201,7 @@ final class ConnectionSidebarTests: XCTestCase {
 
         // When
         sut.connectionToConnect = connection
-        await sut.attemptConnect(connection, password: "secretAccessKey")
+        sut.connectWithPassword("secretAccessKey")
 
         // Then
         XCTAssertEqual(tabManager.tabs.count, 1)
@@ -231,17 +212,17 @@ final class ConnectionSidebarTests: XCTestCase {
     // MARK: - Session Isolation Tests
 
     /// Each tab should have its own session (isolation between connections).
-    func testConnectToServer_createsSeparateSessions() async {
+    func testConnectToServer_createsSeparateSessions() {
         // Given
         let conn1 = makeConnection(name: "S1", host: "h1.com")
         let conn2 = makeConnection(name: "S2", host: "h2.com")
 
         // When
         sut.connectionToConnect = conn1
-        await sut.attemptConnect(conn1, password: "p1")
+        sut.connectWithPassword("p1")
 
         sut.connectionToConnect = conn2
-        await sut.attemptConnect(conn2, password: "p2")
+        sut.connectWithPassword("p2")
 
         // Then — two separate sessions were created
         XCTAssertEqual(capturedSessions.count, 2, "Each connection should get its own session")

@@ -56,6 +56,19 @@ final class WindowManagerTests: XCTestCase {
         )
     }
 
+    private func makeTerminalData() -> TerminalWindowData {
+        TerminalWindowData(
+            connectionId: UUID(),
+            connectionName: "Test Terminal",
+            host: "term.example.com",
+            port: 22,
+            username: "termuser",
+            password: "termpass",
+            authMethod: .password,
+            privateKeyPath: nil
+        )
+    }
+
     // MARK: - Setup / Teardown
 
     override func setUp() async throws {
@@ -166,17 +179,52 @@ final class WindowManagerTests: XCTestCase {
         XCTAssertNil(manager.getFileInfoData(for: id))
     }
 
+    // MARK: - TerminalWindowData CRUD
+
+    func testStoreTerminalData_ReturnsNonEmptyID() {
+        let id = manager.storeTerminalData(makeTerminalData())
+        XCTAssertFalse(id.isEmpty)
+    }
+
+    func testGetTerminalData_ReturnsStoredData() {
+        let data = makeTerminalData()
+        let id = manager.storeTerminalData(data)
+
+        let retrieved = manager.getTerminalData(for: id)
+
+        XCTAssertNotNil(retrieved)
+        XCTAssertEqual(retrieved?.connectionName, "Test Terminal")
+        XCTAssertEqual(retrieved?.host, "term.example.com")
+        XCTAssertEqual(retrieved?.username, "termuser")
+    }
+
+    func testGetTerminalData_NonexistentID_ReturnsNil() {
+        let result = manager.getTerminalData(for: "nonexistent")
+        XCTAssertNil(result)
+    }
+
+    func testRemoveTerminalData_SubsequentGetReturnsNil() {
+        let id = manager.storeTerminalData(makeTerminalData())
+        XCTAssertNotNil(manager.getTerminalData(for: id))
+
+        manager.removeTerminalData(for: id)
+
+        XCTAssertNil(manager.getTerminalData(for: id))
+    }
+
     // MARK: - clearAllData
 
     func testClearAllData_RemovesAllTypes() {
         let browserID = manager.storeFileBrowserData(makeBrowserData())
         let editorID = manager.storeFileEditorData(makeEditorData())
         let infoID = manager.storeFileInfoData(makeFileInfoData())
+        let terminalID = manager.storeTerminalData(makeTerminalData())
 
         // Verify all stored
         XCTAssertNotNil(manager.getFileBrowserData(for: browserID))
         XCTAssertNotNil(manager.getFileEditorData(for: editorID))
         XCTAssertNotNil(manager.getFileInfoData(for: infoID))
+        XCTAssertNotNil(manager.getTerminalData(for: terminalID))
 
         manager.clearAllData()
 
@@ -184,6 +232,7 @@ final class WindowManagerTests: XCTestCase {
         XCTAssertNil(manager.getFileBrowserData(for: browserID))
         XCTAssertNil(manager.getFileEditorData(for: editorID))
         XCTAssertNil(manager.getFileInfoData(for: infoID))
+        XCTAssertNil(manager.getTerminalData(for: terminalID))
     }
 
     // MARK: - Multiple Entries

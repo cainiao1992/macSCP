@@ -1,18 +1,20 @@
 //
-//  FileInfoWindow.swift
+//  TerminalWindow.swift
 //  macSCP
 //
-//  Window wrapper for file info
+//  Window wrapper for the terminal
 //
 
 import SwiftUI
 
-struct FileInfoWindow: View {
+struct TerminalWindow: View {
     let windowId: String
-    @State private var viewModel: FileInfoViewModel?
+    @State private var viewModel: TerminalViewModel?
     @State private var showMissingDataError = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.windowManager) private var windowManager
+    @Environment(\.makeTerminalSession) private var makeTerminalSession
+    @Environment(\.makeTerminalViewModel) private var makeTerminalViewModel
 
     var body: some View {
         Group {
@@ -23,43 +25,50 @@ struct FileInfoWindow: View {
                         .foregroundStyle(.orange)
                     Text("Session Expired")
                         .font(.headline)
-                    Text("This window's data was lost.")
+                    Text("This window's session data was lost. Please reconnect from the main window.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                     Button("Close Window") {
                         dismiss()
                     }
                 }
                 .padding(32)
             } else if let viewModel = viewModel {
-                FileInfoView(viewModel: viewModel)
-                    .navigationTitle("Info - \(viewModel.fileName)")
+                TerminalContentView(viewModel: viewModel)
             } else {
-                LoadingView(message: "Loading...")
+                LoadingView(message: "Initializing...")
                     .task {
                         initializeViewModel()
                     }
             }
         }
-        .frame(width: WindowSize.fileInfo.width, height: WindowSize.fileInfo.height)
+        .frame(minWidth: WindowSize.minTerminal.width, minHeight: WindowSize.minTerminal.height)
     }
 
     @MainActor
     private func initializeViewModel() {
-        guard let data = windowManager.getFileInfoData(for: windowId) else {
-            logError("No file info data found for ID: \(windowId)", category: .ui)
+        guard let data = windowManager.getTerminalData(for: windowId) else {
+            logError("No terminal window data found for ID: \(windowId)", category: .ui)
             showMissingDataError = true
             return
         }
 
-        viewModel = FileInfoViewModel(
-            file: data.file,
-            connectionName: data.connectionName
+        let session = makeTerminalSession(data)
+
+        viewModel = makeTerminalViewModel(
+            data.connectionName,
+            session,
+            data
         )
+
+        // Clean up sensitive data from WindowManager after use
+        windowManager.removeTerminalData(for: windowId)
     }
 }
 
 // MARK: - Preview
+
 #Preview {
-    FileInfoWindow(windowId: "preview")
+    TerminalWindow(windowId: "preview")
 }

@@ -28,9 +28,7 @@ final class ConnectionMapperTests: XCTestCase {
             connectionType: ConnectionType.sftp.rawValue,
             s3Region: "us-east-1",
             s3Bucket: "my-bucket",
-            s3Endpoint: "https://s3.example.com",
-            isFavorite: true,
-            lastUsedAt: Date(timeIntervalSince1970: 1000000)
+            s3Endpoint: "https://s3.example.com"
         )
 
         let domain = ConnectionMapper.toDomain(entity)
@@ -49,8 +47,6 @@ final class ConnectionMapperTests: XCTestCase {
         XCTAssertEqual(domain.s3Region, "us-east-1")
         XCTAssertEqual(domain.s3Bucket, "my-bucket")
         XCTAssertEqual(domain.s3Endpoint, "https://s3.example.com")
-        XCTAssertEqual(domain.isFavorite, true)
-        XCTAssertEqual(domain.lastUsedAt, Date(timeIntervalSince1970: 1000000))
     }
 
     func testToDomain_AuthMethodFallback() {
@@ -106,9 +102,7 @@ final class ConnectionMapperTests: XCTestCase {
             tags: ["tag1"], iconName: "icon",
             connectionType: .s3, s3Region: "region",
             s3Bucket: "bucket",
-            s3Endpoint: "endpoint",
-            isFavorite: true,
-            lastUsedAt: Date(timeIntervalSince1970: 1000000)
+            s3Endpoint: "endpoint"
         )
 
         ConnectionMapper.update(entity, from: domain)
@@ -127,8 +121,6 @@ final class ConnectionMapperTests: XCTestCase {
         XCTAssertEqual(entity.s3Bucket, "bucket")
         XCTAssertEqual(entity.s3Endpoint, "endpoint")
         XCTAssertEqual(entity.s3Region, "region")
-        XCTAssertEqual(entity.isFavorite, true)
-        XCTAssertEqual(entity.lastUsedAt, Date(timeIntervalSince1970: 1000000))
     }
 
     func testUpdate_SetsCurrentDate() {
@@ -156,9 +148,7 @@ final class ConnectionMapperTests: XCTestCase {
             description: "desc", tags: ["t"], iconName: "i",
             connectionType: .s3, s3Region: "r",
             s3Bucket: "b",
-            s3Endpoint: "e",
-            isFavorite: true,
-            lastUsedAt: Date(timeIntervalSince1970: 1000000)
+            s3Endpoint: "e"
         )
 
         let entity = ConnectionMapper.toEntity(domain)
@@ -177,8 +167,6 @@ final class ConnectionMapperTests: XCTestCase {
         XCTAssertEqual(entity.s3Bucket, "b")
         XCTAssertEqual(entity.s3Endpoint, "e")
         XCTAssertEqual(entity.s3Region, "r")
-        XCTAssertEqual(entity.isFavorite, true)
-        XCTAssertEqual(entity.lastUsedAt, Date(timeIntervalSince1970: 1000000))
     }
 
     func testToEntity_AuthMethodRawValue() {
