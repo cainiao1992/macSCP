@@ -108,7 +108,7 @@ macSCP is a modern, native macOS application built with SwiftUI that provides se
 ## Installation
 
 ### Download
-1. Download the latest release from the [Releases](https://github.com/macnev2013/macSCP/releases) page
+1. Download the latest release from the [Releases](https://github.com/cainiao1992/macSCP/releases) page
 2. Open the `.dmg` file
 3. Drag macSCP to your Applications folder
 4. Launch macSCP from Applications
@@ -138,7 +138,7 @@ macSCP uses Swift Package Manager for dependency management. Required packages:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/macnev2013/macSCP.git
+   git clone https://github.com/cainiao1992/macSCP.git
    cd macSCP
    ```
 
@@ -285,13 +285,13 @@ This project is licensed under CC0 1.0 Universal - see the [LICENSE](LICENSE) fi
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/macnev2013/macSCP/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/macnev2013/macSCP/discussions)
+- **Issues**: [GitHub Issues](https://github.com/cainiao1992/macSCP/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/cainiao1992/macSCP/discussions)
 
 ---
 
 <p align="center">
-  If you find macSCP useful, please consider giving it a <a href="https://github.com/macnev2013/macSCP">star on GitHub</a>!
+  If you find macSCP useful, please consider giving it a <a href="https://github.com/cainiao1992/macSCP">star on GitHub</a>!
 </p>
 
 <p align="center">
