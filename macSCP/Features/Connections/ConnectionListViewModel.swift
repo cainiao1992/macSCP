@@ -35,8 +35,6 @@ final class ConnectionListViewModel {
     private(set) var folders: [Folder] = []
     private(set) var state: ViewState<Void> = .idle
     var error: AppError?
-    private(set) var connectionError: AppError?
-    private(set) var isConnecting: Bool = false
     private(set) var testConnectionState: TestConnectionState = .idle
     private(set) var connectionStatuses: [UUID: ConnectionStatus] = [:]
 
@@ -58,7 +56,6 @@ final class ConnectionListViewModel {
     var connectionToEdit: Connection?
     var connectionToConnect: Connection?
     var folderToDelete: Folder?
-    var pendingTerminalWindowId: String?
 
     // MARK: - Dependencies
     private let connectionRepository: ConnectionRepositoryProtocol
@@ -77,13 +74,11 @@ final class ConnectionListViewModel {
     private lazy var connectionInitiator: ConnectionInitiator = {
         ConnectionInitiator(
             keychainService: keychainService,
-            windowManager: windowManager,
             tabManager: tabManager,
             appLockManager: appLockManager,
             getConnectionToConnect: { [weak self] in self?.connectionToConnect },
             onSetConnectionToConnect: { [weak self] conn in self?.connectionToConnect = conn },
-            onShowPasswordPrompt: { [weak self] show in self?.isShowingPasswordPrompt = show },
-            onSetPendingTerminalWindowId: { _ in }
+            onShowPasswordPrompt: { [weak self] show in self?.isShowingPasswordPrompt = show }
         )
     }()
 
@@ -505,93 +500,11 @@ final class ConnectionListViewModel {
     // MARK: - Connection Operations
 
     func connectToServer(_ connection: Connection) {
-        logInfo("Connect requested for: \(connection.name)", category: .ui)
-
-        Task { @MainActor in
-            // Gate connection behind biometric auth if configured
-            let allowed = await appLockManager.authenticateForConnection()
-            guard allowed else {
-                logInfo("Connection cancelled: biometric auth denied", category: .auth)
-                return
-            }
-
-            connectionToConnect = connection
-            connectionError = nil
-
-            if connection.connectionType == .s3 {
-                // For S3, check for saved credentials
-                if let credentials = keychainService.getS3Credentials(for: connection.id) {
-                    logInfo("Found saved S3 credentials, opening browser", category: .ui)
-                    openFileBrowser(for: connection, password: credentials.secretAccessKey)
-                } else {
-                    logInfo("No saved S3 credentials, showing prompt", category: .ui)
-                    isShowingPasswordPrompt = true
-                }
-            } else {
-                // For SFTP, check for saved password
-                if let savedPassword = keychainService.getPassword(for: connection.id) {
-                    logInfo("Found saved password, opening browser", category: .ui)
-                    openFileBrowser(for: connection, password: savedPassword)
-                } else if connection.authMethod == .privateKey {
-                    // Key-based auth doesn't require a password — connect directly
-                    logInfo("Private key auth, connecting without password", category: .ui)
-                    openFileBrowser(for: connection, password: "")
-                } else {
-                    logInfo("No saved password, showing prompt", category: .ui)
-                    isShowingPasswordPrompt = true
-                }
-            }
-        }
+        connectionInitiator.connectToServer(connection)
     }
 
     func connectWithPassword(_ password: String) {
-        guard let connection = connectionToConnect else { return }
-        Task { await attemptConnect(connection, password: password) }
-    }
-
-    func attemptConnect(_ connection: Connection, password: String) async {
-        isConnecting = true
-        defer { isConnecting = false }
-
-        do {
-            if connection.connectionType == .s3 {
-                let session = makeS3Session()
-                try await session.connect(
-                    accessKeyId: connection.username,
-                    secretAccessKey: password,
-                    region: connection.s3Region ?? "us-east-1",
-                    bucket: connection.s3Bucket ?? "",
-                    endpoint: connection.s3Endpoint
-                )
-            } else {
-                let session = makeSFTPSession()
-                if connection.authMethod == .privateKey {
-                    try await session.connect(
-                        host: connection.host,
-                        port: connection.port,
-                        username: connection.username,
-                        privateKeyPath: connection.privateKeyPath ?? "",
-                        passphrase: password.isEmpty ? nil : password
-                    )
-                } else {
-                    try await session.connect(
-                        host: connection.host,
-                        port: connection.port,
-                        username: connection.username,
-                        password: password
-                    )
-                }
-            }
-
-            openFileBrowser(for: connection, password: password)
-            try await connectionRepository.updateLastUsedAt(id: connection.id)
-
-            isShowingPasswordPrompt = false
-            connectionToConnect = nil
-            connectionError = nil
-        } catch {
-            connectionError = AppError.from(error)
-        }
+        connectionInitiator.connectWithPassword(password)
     }
 
     func cancelConnect() {
@@ -674,68 +587,14 @@ final class ConnectionListViewModel {
         testConnectionState = .idle
     }
 
-    private func openFileBrowser(for connection: Connection, password: String) {
-        tabManager.openTab(connection: connection, password: password)
-        AnalyticsService.trackConnectionConnected(protocol: .init(from: connection.connectionType), success: true)
-        logInfo("Opened tab for connection: \(connection.name)", category: .ui)
-    }
-
-    func clearPendingWindow() {
-        // No-op: tabs are opened directly via TabManager
-    }
-
-    func clearPendingTerminalWindow() {
-        pendingTerminalWindowId = nil
-    }
-
     // MARK: - Terminal Operations
 
-    func openTerminal(for connection: Connection, password: String) {
-        // Only allow terminal for SFTP connections
-        guard connection.connectionType == .sftp else {
-            logWarning("Terminal only supported for SFTP connections", category: .ui)
-            return
-        }
-
-        tabManager.openTab(connection: connection, password: password)
-        logInfo("Opened terminal tab for connection: \(connection.name)", category: .ui)
-    }
-
     func requestTerminal(for connection: Connection) {
-        if connection.connectionType == .s3 {
-            logWarning("Terminal not supported for S3 connections", category: .ui)
-            return
-        }
-
-        Task { @MainActor in
-            // Gate terminal behind biometric auth if configured
-            let allowed = await appLockManager.authenticateForConnection()
-            guard allowed else {
-                logInfo("Terminal cancelled: biometric auth denied", category: .auth)
-                return
-            }
-
-            connectionToConnect = connection
-
-            // Check for saved password
-            if let savedPassword = keychainService.getPassword(for: connection.id) {
-                openTerminal(for: connection, password: savedPassword)
-            } else if connection.authMethod == .privateKey {
-                // Key-based auth doesn't require a password — connect directly
-                logInfo("Private key auth, opening terminal without password", category: .ui)
-                openTerminal(for: connection, password: "")
-            } else {
-                // Need to prompt for password
-                isShowingPasswordPrompt = true
-            }
-        }
+        connectionInitiator.requestTerminal(for: connection)
     }
 
     func openTerminalWithPassword(_ password: String) {
-        guard let connection = connectionToConnect else { return }
-        openTerminal(for: connection, password: password)
-        isShowingPasswordPrompt = false
-        connectionToConnect = nil
+        connectionInitiator.openTerminalWithPassword(password)
     }
 
     // MARK: - Edit Actions

@@ -32,7 +32,26 @@ final class ConnectionSidebarTests: XCTestCase {
         mockAppLockManager = MockAppLockManager()
         capturedSessions = []
 
-        tabManager = TabManager(viewModelFactory: makeViewModel)
+        tabManager = TabManager(
+            browserViewModelFactory: makeViewModel,
+            terminalViewModelFactory: { connection, password in
+                let data = TerminalWindowData(
+                    connectionId: connection.id,
+                    connectionName: connection.name,
+                    host: connection.host,
+                    port: connection.port,
+                    username: connection.username,
+                    password: password,
+                    authMethod: connection.authMethod,
+                    privateKeyPath: connection.privateKeyPath
+                )
+                return TerminalViewModel(
+                    connectionName: connection.name,
+                    session: MockTerminalSession(),
+                    connectionData: data
+                )
+            }
+        )
 
         sut = ConnectionListViewModel(
             connectionRepository: mockConnectionRepository,

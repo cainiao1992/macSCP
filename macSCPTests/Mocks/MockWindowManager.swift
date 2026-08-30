@@ -14,13 +14,11 @@ final class MockWindowManager: WindowManagerProtocol {
     private var fileBrowserData: [String: FileBrowserWindowData] = [:]
     private var fileEditorData: [String: FileEditorWindowData] = [:]
     private var fileInfoData: [String: FileInfoWindowData] = [:]
-    private var terminalData: [String: TerminalWindowData] = [:]
 
     // MARK: - Recorded Calls
     var storeFileBrowserDataCalled = false
     var storeFileEditorDataCalled = false
     var storeFileInfoDataCalled = false
-    var storeTerminalDataCalled = false
     var clearAllDataCalled = false
 
     // MARK: - File Browser Window
@@ -74,23 +72,6 @@ final class MockWindowManager: WindowManagerProtocol {
         fileInfoData.removeValue(forKey: id)
     }
 
-    // MARK: - Terminal Window
-
-    func storeTerminalData(_ data: TerminalWindowData) -> String {
-        storeTerminalDataCalled = true
-        let id = UUID().uuidString
-        terminalData[id] = data
-        return id
-    }
-
-    func getTerminalData(for id: String) -> TerminalWindowData? {
-        terminalData[id]
-    }
-
-    func removeTerminalData(for id: String) {
-        terminalData.removeValue(forKey: id)
-    }
-
     // MARK: - Cleanup
 
     func clearAllData() {
@@ -98,6 +79,5 @@ final class MockWindowManager: WindowManagerProtocol {
         fileBrowserData.removeAll()
         fileEditorData.removeAll()
         fileInfoData.removeAll()
-        terminalData.removeAll()
     }
 }

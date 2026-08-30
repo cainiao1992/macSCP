@@ -17,8 +17,6 @@ struct TabBarView: View {
                 ForEach(Array(tabManager.tabs.enumerated()), id: \.element.id) { index, tab in
                     tabButton(for: tab, at: index)
                 }
-
-                addButton
             }
             .padding(.horizontal, 4)
         }
@@ -128,25 +126,6 @@ struct TabBarView: View {
         }
     }
 
-    // MARK: - Add Button
-
-    private var addButton: some View {
-        Button {
-            // Placeholder — S02 will wire to open a new connection
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 24, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(Color.primary.opacity(0.06))
-                )
-        }
-        .buttonStyle(.plain)
-        .help("Open New Connection")
-        .padding(.leading, 4)
-    }
 }
 
 // MARK: - Preview
@@ -156,7 +135,7 @@ struct TabBarView: View {
     let manager = TabManager(dependencyContainer: container)
 
     // Simulate tabs for preview — at preview time the manager is empty,
-    // so this shows the empty tab bar with just the "+" button.
+    // so this shows the empty tab bar.
     VStack(spacing: 0) {
         TabBarView(tabManager: manager)
         Spacer()

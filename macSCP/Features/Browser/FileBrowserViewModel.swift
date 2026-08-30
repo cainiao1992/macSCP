@@ -47,7 +47,10 @@ final class FileBrowserViewModel {
     var filesToDelete: [RemoteFile] = []
     var pendingFileInfoWindowId: String?
     var pendingEditorWindowId: String?
-    var pendingTerminalWindowId: String?
+
+    /// Set by TabManager when this tab is created — routes terminal requests
+    /// back to the manager so the terminal opens as a sibling tab.
+    @ObservationIgnored var onOpenTerminal: ((Connection, String) -> Void)?
 
     // MARK: - Connection Info & Dependencies
     let connection: Connection
@@ -342,13 +345,11 @@ final class FileBrowserViewModel {
     }
 
     func clearPendingEditorWindow() { pendingEditorWindowId = nil }
-    func clearPendingTerminalWindow() { pendingTerminalWindowId = nil }
 
     // MARK: - Terminal
 
     func openTerminal() {
-        guard let windowId = windowActionCoordinator.terminalWindowId() else { return }
-        pendingTerminalWindowId = windowId
+        onOpenTerminal?(connection, password)
     }
 
     // MARK: - Error

@@ -85,35 +85,4 @@ final class WindowActionCoordinatorTests: XCTestCase {
         XCTAssertEqual(stored?.password, "secret")
         XCTAssertEqual(stored?.connectionType, .sftp)
     }
-
-    // MARK: - Terminal (SFTP allowed, S3 disallowed)
-
-    func testTerminalWindowId_SFTPReturnsId() {
-        let sftpSut = WindowActionCoordinator(
-            connection: sftpConnection,
-            password: "secret",
-            windowManager: mockWindowManager
-        )
-
-        let id = sftpSut.terminalWindowId()
-
-        XCTAssertNotNil(id)
-        XCTAssertTrue(mockWindowManager.storeTerminalDataCalled)
-        let stored = mockWindowManager.getTerminalData(for: id!)
-        XCTAssertEqual(stored?.host, "sftp.example.com")
-        XCTAssertEqual(stored?.connectionId, sftpConnection.id)
-    }
-
-    func testTerminalWindowId_S3ReturnsNil() {
-        let s3Sut = WindowActionCoordinator(
-            connection: s3Connection,
-            password: "secret",
-            windowManager: mockWindowManager
-        )
-
-        let id = s3Sut.terminalWindowId()
-
-        XCTAssertNil(id)
-        XCTAssertFalse(mockWindowManager.storeTerminalDataCalled)
-    }
 }

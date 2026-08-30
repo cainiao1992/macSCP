@@ -82,20 +82,6 @@ struct MacSCPApp: App {
         .defaultSize(WindowSize.fileInfo)
         .windowResizability(.contentSize)
 
-        // Terminal Window
-        WindowGroup(id: WindowID.terminal, for: String.self) { $windowId in
-            if let windowId = windowId {
-                TerminalWindow(windowId: windowId)
-                    .appLockOverlay()
-                    .environment(\.appLockManager, container.appLockManager)
-                    .environment(\.windowManager, container.windowManager)
-                    .environment(\.makeTerminalSession, { container.makeTerminalSession(connectionData: $0) })
-                    .environment(\.makeTerminalViewModel, { container.makeTerminalViewModel(connectionName: $0, session: $1, connectionData: $2) })
-            }
-        }
-        .modelContainer(container.modelContainer)
-        .defaultSize(WindowSize.terminal)
-
         // Settings Window (Cmd+,)
         Settings {
             SettingsView()

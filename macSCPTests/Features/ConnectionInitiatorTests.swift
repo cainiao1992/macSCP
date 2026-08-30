@@ -13,14 +13,12 @@ import XCTest
 final class ConnectionInitiatorTests: XCTestCase {
     // MARK: - Dependencies
     var mockKeychainService: MockKeychainService!
-    var mockWindowManager: MockWindowManager!
     var mockAppLockManager: MockAppLockManager!
     var tabManager: TabManager!
 
     // MARK: - Captured Callback State
     var capturedConnectionToConnect: Connection?
     var passwordPromptShown = false
-    var capturedPendingTerminalWindowId: String?
 
     let testConnection = Connection(name: "Test Server", host: "test.example.com", username: "user")
 
@@ -30,17 +28,14 @@ final class ConnectionInitiatorTests: XCTestCase {
         try await super.setUp()
         mockKeychainService = MockKeychainService()
         mockKeychainService.reset()
-        mockWindowManager = MockWindowManager()
         mockAppLockManager = MockAppLockManager()
         capturedConnectionToConnect = nil
         passwordPromptShown = false
-        capturedPendingTerminalWindowId = nil
     }
 
     override func tearDown() async throws {
         tabManager = nil
         mockKeychainService = nil
-        mockWindowManager = nil
         mockAppLockManager = nil
         try await super.tearDown()
     }
@@ -50,28 +45,45 @@ final class ConnectionInitiatorTests: XCTestCase {
     /// Builds a TabManager whose factory constructs a real (mock-backed) FileBrowserViewModel,
     /// so that `openTab` appends a tab without crashing.
     private func makeTabManager() -> TabManager {
-        TabManager(viewModelFactory: { connection, password in
-            FileBrowserViewModel(
-                connection: connection,
-                sftpSession: MockSFTPSession(),
-                fileRepository: MockFileRepository(),
-                clipboardService: MockClipboardService(),
-                windowManager: MockWindowManager(),
-                password: password
-            )
-        })
+        TabManager(
+            browserViewModelFactory: { connection, password in
+                FileBrowserViewModel(
+                    connection: connection,
+                    sftpSession: MockSFTPSession(),
+                    fileRepository: MockFileRepository(),
+                    clipboardService: MockClipboardService(),
+                    windowManager: MockWindowManager(),
+                    password: password
+                )
+            },
+            terminalViewModelFactory: { connection, password in
+                let data = TerminalWindowData(
+                    connectionId: connection.id,
+                    connectionName: connection.name,
+                    host: connection.host,
+                    port: connection.port,
+                    username: connection.username,
+                    password: password,
+                    authMethod: connection.authMethod,
+                    privateKeyPath: connection.privateKeyPath
+                )
+                return TerminalViewModel(
+                    connectionName: connection.name,
+                    session: MockTerminalSession(),
+                    connectionData: data
+                )
+            }
+        )
     }
 
     private func makeSut() -> ConnectionInitiator {
         ConnectionInitiator(
             keychainService: mockKeychainService,
-            windowManager: mockWindowManager,
             tabManager: tabManager,
             appLockManager: mockAppLockManager,
             getConnectionToConnect: { [weak self] in self?.capturedConnectionToConnect },
             onSetConnectionToConnect: { [weak self] conn in self?.capturedConnectionToConnect = conn },
-            onShowPasswordPrompt: { [weak self] show in if show { self?.passwordPromptShown = true } },
-            onSetPendingTerminalWindowId: { [weak self] id in self?.capturedPendingTerminalWindowId = id }
+            onShowPasswordPrompt: { [weak self] show in if show { self?.passwordPromptShown = true } }
         )
     }
 

@@ -12,13 +12,11 @@ import Foundation
 final class ConnectionInitiator {
     // MARK: - Dependencies
     private let keychainService: KeychainServiceProtocol
-    private let windowManager: any WindowManagerProtocol
     private let tabManager: TabManager
     private let appLockManager: any AppLockManagerProtocol
     private let getConnectionToConnect: () -> Connection?
     private let onSetConnectionToConnect: (Connection?) -> Void
     private let onShowPasswordPrompt: (Bool) -> Void
-    private let onSetPendingTerminalWindowId: (String?) -> Void
 
     // MARK: - Deinit
     // nonisolated deinit avoids the swift_task_deinitOnExecutorMainActorBackDeploy
@@ -29,22 +27,18 @@ final class ConnectionInitiator {
     // MARK: - Initialization
     init(
         keychainService: KeychainServiceProtocol,
-        windowManager: any WindowManagerProtocol,
         tabManager: TabManager,
         appLockManager: any AppLockManagerProtocol,
         getConnectionToConnect: @escaping () -> Connection?,
         onSetConnectionToConnect: @escaping (Connection?) -> Void,
-        onShowPasswordPrompt: @escaping (Bool) -> Void,
-        onSetPendingTerminalWindowId: @escaping (String?) -> Void
+        onShowPasswordPrompt: @escaping (Bool) -> Void
     ) {
         self.keychainService = keychainService
-        self.windowManager = windowManager
         self.tabManager = tabManager
         self.appLockManager = appLockManager
         self.getConnectionToConnect = getConnectionToConnect
         self.onSetConnectionToConnect = onSetConnectionToConnect
         self.onShowPasswordPrompt = onShowPasswordPrompt
-        self.onSetPendingTerminalWindowId = onSetPendingTerminalWindowId
     }
 
     // MARK: - Connection Operations
@@ -106,26 +100,8 @@ final class ConnectionInitiator {
     // MARK: - Terminal Operations
 
     func openTerminal(for connection: Connection, password: String) {
-        // Only allow terminal for SFTP connections
-        guard connection.connectionType == .sftp else {
-            logWarning("Terminal only supported for SFTP connections", category: .ui)
-            return
-        }
-
-        let data = TerminalWindowData(
-            connectionId: connection.id,
-            connectionName: connection.name,
-            host: connection.host,
-            port: connection.port,
-            username: connection.username,
-            password: password,
-            authMethod: connection.authMethod,
-            privateKeyPath: connection.privateKeyPath
-        )
-
-        let windowId = windowManager.storeTerminalData(data)
-        logInfo("Stored terminal window data with ID: \(windowId)", category: .ui)
-        onSetPendingTerminalWindowId(windowId)
+        tabManager.openTerminalTab(connection: connection, password: password)
+        logInfo("Opened terminal tab for connection: \(connection.name)", category: .ui)
     }
 
     func requestTerminal(for connection: Connection) {

@@ -67,30 +67,4 @@ final class WindowActionCoordinator {
         AnalyticsService.trackEditorOpened(fileExtension: (file.name as NSString).pathExtension)
         return windowId
     }
-
-    // MARK: - Terminal
-
-    /// Opens a terminal window for SFTP connections. Returns nil for unsupported
-    /// connection types (e.g. S3).
-    func terminalWindowId() -> String? {
-        guard connection.connectionType == .sftp else {
-            logWarning("Terminal only supported for SFTP connections", category: .ui)
-            return nil
-        }
-
-        let data = TerminalWindowData(
-            connectionId: connection.id,
-            connectionName: connection.name,
-            host: connection.host,
-            port: connection.port,
-            username: connection.username,
-            password: password,
-            authMethod: connection.authMethod,
-            privateKeyPath: connection.privateKeyPath
-        )
-
-        let windowId = windowManager.storeTerminalData(data)
-        logInfo("Opening terminal from file browser", category: .ui)
-        return windowId
-    }
 }

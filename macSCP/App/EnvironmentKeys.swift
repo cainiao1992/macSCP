@@ -99,22 +99,6 @@ private struct MakeFileEditorDependenciesKey: EnvironmentKey {
     }
 }
 
-private struct MakeTerminalSessionKey: EnvironmentKey {
-    static var defaultValue: (TerminalWindowData) -> TerminalSessionProtocol {
-        { DependencyContainer.shared.makeTerminalSession(connectionData: $0) }
-    }
-}
-
-private struct MakeTerminalViewModelKey: EnvironmentKey {
-    static var defaultValue: (String, TerminalSessionProtocol, TerminalWindowData) -> TerminalViewModel {
-        { connectionName, session, connectionData in
-            DependencyContainer.shared.makeTerminalViewModel(
-                connectionName: connectionName, session: session, connectionData: connectionData
-            )
-        }
-    }
-}
-
 extension EnvironmentValues {
     var makeFileBrowserViewModel: (Connection, any SFTPSessionProtocol, String) -> FileBrowserViewModel {
         get { self[MakeFileBrowserViewModelKey.self] }
@@ -139,15 +123,5 @@ extension EnvironmentValues {
     var makeFileEditorDependencies: (FileEditorWindowData) async throws -> (FileRepositoryProtocol, S3SessionProtocol?, SFTPSessionProtocol?) {
         get { self[MakeFileEditorDependenciesKey.self] }
         set { self[MakeFileEditorDependenciesKey.self] = newValue }
-    }
-
-    var makeTerminalSession: (TerminalWindowData) -> TerminalSessionProtocol {
-        get { self[MakeTerminalSessionKey.self] }
-        set { self[MakeTerminalSessionKey.self] = newValue }
-    }
-
-    var makeTerminalViewModel: (String, TerminalSessionProtocol, TerminalWindowData) -> TerminalViewModel {
-        get { self[MakeTerminalViewModelKey.self] }
-        set { self[MakeTerminalViewModelKey.self] = newValue }
     }
 }

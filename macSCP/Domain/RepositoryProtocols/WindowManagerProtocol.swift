@@ -24,11 +24,6 @@ protocol WindowManagerProtocol: AnyObject {
     func getFileInfoData(for id: String) -> FileInfoWindowData?
     func removeFileInfoData(for id: String)
 
-    // MARK: - Terminal Window
-    func storeTerminalData(_ data: TerminalWindowData) -> String
-    func getTerminalData(for id: String) -> TerminalWindowData?
-    func removeTerminalData(for id: String)
-
     // MARK: - Cleanup
     func clearAllData()
 }

@@ -11,7 +11,6 @@ import UniformTypeIdentifiers
 
 struct ConnectionSidebarView: View {
     @Bindable var viewModel: ConnectionListViewModel
-    @Environment(\.openWindow) private var openWindow
     @State private var newFolderName = ""
     @State private var folderToRename: Folder?
     @State private var renameText = ""
@@ -165,14 +164,6 @@ struct ConnectionSidebarView: View {
             Text("Enter a new name for the folder.")
         }
         .errorAlert($viewModel.error)
-        // MARK: - Terminal Window
-        .onChange(of: viewModel.pendingTerminalWindowId) { _, windowId in
-            if let windowId = windowId {
-                logInfo("Opening terminal window with ID: \(windowId)", category: .ui)
-                openWindow(id: WindowID.terminal, value: windowId)
-                viewModel.clearPendingTerminalWindow()
-            }
-        }
     }
 
     // MARK: - Connection Sections
