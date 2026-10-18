@@ -14,20 +14,35 @@ final class ConnectionListViewModelTests: XCTestCase {
     var mockConnectionRepository: MockConnectionRepository!
     var mockFolderRepository: MockFolderRepository!
     var mockKeychainService: MockKeychainService!
-    var mockWindowManager: WindowManager!
+    var mockWindowManager: MockWindowManager!
+    var mockAppLockManager: MockAppLockManager!
 
     override func setUp() async throws {
         try await super.setUp()
         mockConnectionRepository = MockConnectionRepository()
         mockFolderRepository = MockFolderRepository()
         mockKeychainService = MockKeychainService()
-        mockWindowManager = WindowManager.shared
+        mockWindowManager = MockWindowManager()
+        mockAppLockManager = MockAppLockManager()
+
+        await mockConnectionRepository.reset()
+        await mockFolderRepository.reset()
+        await mockKeychainService.reset()
 
         sut = ConnectionListViewModel(
             connectionRepository: mockConnectionRepository,
             folderRepository: mockFolderRepository,
             keychainService: mockKeychainService,
-            windowManager: mockWindowManager
+            windowManager: mockWindowManager,
+            tabManager: TabManager(
+                browserViewModelFactory: { _, _ in
+                    fatalError("TabManager factory called in test — not expected")
+                },
+                terminalViewModelFactory: { _, _ in
+                    fatalError("TabManager factory called in test — not expected")
+                }
+            ),
+            appLockManager: mockAppLockManager
         )
     }
 
@@ -37,6 +52,7 @@ final class ConnectionListViewModelTests: XCTestCase {
         mockFolderRepository = nil
         mockKeychainService = nil
         mockWindowManager = nil
+        mockAppLockManager = nil
         try await super.tearDown()
     }
 

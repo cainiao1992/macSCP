@@ -1,0 +1,179 @@
+//
+//  TabBarView.swift
+//  macSCP
+//
+//  Horizontal tab strip showing open connections as tabs
+//
+
+import SwiftUI
+
+struct TabBarView: View {
+    @Bindable var tabManager: TabManager
+    @State private var hoveredTabId: UUID?
+    @State private var isShowingCloseOthersConfirmation = false
+    @State private var tabToKeepIndex: Int?
+    @State private var isShowingCloseAllConfirmation = false
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                ForEach(Array(tabManager.tabs.enumerated()), id: \.element.id) { index, tab in
+                    tabButton(for: tab, at: index)
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        .background(.bar)
+        .frame(height: 32)
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
+        .confirmationDialog(
+            "Close Other Tabs",
+            isPresented: $isShowingCloseOthersConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Close Other Tabs", role: .destructive) {
+                if let index = tabToKeepIndex {
+                    Task { await closeOtherTabs(keeping: index) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will disconnect the sessions of the other \(max(tabManager.tabs.count - 1, 0)) tab\(tabManager.tabs.count - 1 == 1 ? "" : "s").")
+        }
+        .confirmationDialog(
+            "Close All Tabs",
+            isPresented: $isShowingCloseAllConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Close All Tabs", role: .destructive) {
+                Task { await tabManager.closeAllTabs() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will disconnect all \(tabManager.tabs.count) open session\(tabManager.tabs.count == 1 ? "" : "s").")
+        }
+    }
+
+    // MARK: - Tab Button
+
+    @ViewBuilder
+    private func tabButton(for tab: TabModel, at index: Int) -> some View {
+        let isActive = tabManager.activeTabIndex == index
+        let isHovered = hoveredTabId == tab.id
+
+        HStack(spacing: 5) {
+            Button {
+                tabManager.switchToTab(at: index)
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: tab.icon)
+                        .font(.system(size: 11))
+                        .foregroundStyle(isActive ? .primary : .secondary)
+
+                    Text(tab.title)
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(tab.title)
+            .accessibilityAddTraits(isActive ? [.isSelected] : [])
+
+            if isActive || isHovered {
+                Button {
+                    Task {
+                        await tabManager.closeTab(at: index)
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Close Tab")
+                .accessibilityLabel("Close \(tab.title)")
+                .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background {
+            RoundedRectangle(cornerRadius: UIConstants.chipCornerRadius)
+                .fill(isActive
+                    ? Color.accentColor.opacity(0.12)
+                    : (isHovered ? Color.primary.opacity(0.06) : Color.clear))
+        }
+        .contentShape(Rectangle())
+        .animation(.easeInOut(duration: 0.15), value: hoveredTabId)
+        .draggable(tab.id.uuidString) {
+            Text(tab.title)
+                .font(.system(size: 12))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: UIConstants.chipCornerRadius))
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let draggedUUIDString = items.first,
+                  let draggedId = UUID(uuidString: draggedUUIDString),
+                  let sourceIndex = tabManager.tabs.firstIndex(where: { $0.id == draggedId })
+            else { return false }
+            tabManager.moveTab(from: sourceIndex, to: index)
+            return true
+        } isTargeted: { isTargeted in
+            if isTargeted {
+                hoveredTabId = tab.id
+            }
+        }
+        .onHover { hovering in
+            hoveredTabId = hovering ? tab.id : nil
+        }
+        .contextMenu {
+            Button("Close Tab") {
+                Task {
+                    await tabManager.closeTab(at: index)
+                }
+            }
+
+            Button("Close Other Tabs") {
+                tabToKeepIndex = index
+                isShowingCloseOthersConfirmation = true
+            }
+
+            Divider()
+
+            Button("Close All Tabs") {
+                isShowingCloseAllConfirmation = true
+            }
+        }
+    }
+
+    // MARK: - Batch Close
+
+    private func closeOtherTabs(keeping index: Int) async {
+        let indicesToClose = (0..<tabManager.tabs.count)
+            .filter { $0 != index }
+            .sorted(by: >) // Close from right to left to preserve indices
+        for idx in indicesToClose {
+            await tabManager.closeTab(at: idx)
+        }
+    }
+
+}
+
+// MARK: - Preview
+
+#Preview("Tab Bar") {
+    let container = DependencyContainer.shared
+    let manager = TabManager(dependencyContainer: container)
+
+    // Simulate tabs for preview — at preview time the manager is empty,
+    // so this shows the empty tab bar.
+    VStack(spacing: 0) {
+        TabBarView(tabManager: manager)
+        Spacer()
+    }
+    .frame(width: 600, height: 100)
+}

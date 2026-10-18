@@ -8,7 +8,7 @@
 import Foundation
 import os.log
 
-enum LogCategory: String {
+enum LogCategory: String, Sendable {
     case app = "App"
     case sftp = "SFTP"
     case s3 = "S3"
@@ -19,13 +19,13 @@ enum LogCategory: String {
     case auth = "Auth"
 }
 
-enum LogLevel {
+enum LogLevel: Sendable {
     case debug
     case info
     case warning
     case error
 
-    var osLogType: OSLogType {
+    nonisolated var osLogType: OSLogType {
         switch self {
         case .debug: return .debug
         case .info: return .info
@@ -34,7 +34,7 @@ enum LogLevel {
         }
     }
 
-    var prefix: String {
+    nonisolated var prefix: String {
         switch self {
         case .debug: return "[DEBUG]"
         case .info: return "[INFO]"
@@ -44,19 +44,21 @@ enum LogLevel {
     }
 }
 
-final class Logger {
-    static let shared = Logger()
+final class Logger: Sendable {
+    private let subsystem: String
+    private let loggers: [LogCategory: os.Logger]
 
-    private let subsystem = Bundle.main.bundleIdentifier ?? AppConstants.bundleIdentifier
-    private var loggers: [LogCategory: os.Logger] = [:]
-
-    private init() {
+    init(subsystem: String? = nil) {
+        let bundleId = subsystem ?? Bundle.main.bundleIdentifier ?? "com.macSCP"
+        self.subsystem = bundleId
+        var builtLoggers: [LogCategory: os.Logger] = [:]
         for category in [LogCategory.app, .sftp, .s3, .keychain, .database, .ui, .network, .auth] {
-            loggers[category] = os.Logger(subsystem: subsystem, category: category.rawValue)
+            builtLoggers[category] = os.Logger(subsystem: bundleId, category: category.rawValue)
         }
+        loggers = builtLoggers
     }
 
-    func log(
+    nonisolated func log(
         _ message: String,
         level: LogLevel = .info,
         category: LogCategory = .app,
@@ -75,36 +77,43 @@ final class Logger {
         #endif
     }
 
-    func debug(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
+    nonisolated func debug(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
         log(message, level: .debug, category: category, file: file, function: function, line: line)
     }
 
-    func info(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
+    nonisolated func info(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
         log(message, level: .info, category: category, file: file, function: function, line: line)
     }
 
-    func warning(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
+    nonisolated func warning(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
         log(message, level: .warning, category: category, file: file, function: function, line: line)
     }
 
-    func error(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
+    nonisolated func error(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
         log(message, level: .error, category: category, file: file, function: function, line: line)
     }
 }
 
+// MARK: - Singleton Access
+
+extension Logger {
+    nonisolated static let shared = Logger()
+}
+
 // MARK: - Convenience Functions
-func logDebug(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
+
+nonisolated func logDebug(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
     Logger.shared.debug(message, category: category, file: file, function: function, line: line)
 }
 
-func logInfo(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
+nonisolated func logInfo(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
     Logger.shared.info(message, category: category, file: file, function: function, line: line)
 }
 
-func logWarning(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
+nonisolated func logWarning(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
     Logger.shared.warning(message, category: category, file: file, function: function, line: line)
 }
 
-func logError(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
+nonisolated func logError(_ message: String, category: LogCategory = .app, file: String = #file, function: String = #function, line: Int = #line) {
     Logger.shared.error(message, category: category, file: file, function: function, line: line)
 }

@@ -91,6 +91,20 @@ final class MockConnectionRepository: ConnectionRepositoryProtocol, @unchecked S
         if let error = mockError { throw error }
     }
 
+    func toggleFavorite(id: UUID) async throws {
+        if let error = mockError { throw error }
+        if let index = mockConnections.firstIndex(where: { $0.id == id }) {
+            mockConnections[index].isFavorite.toggle()
+        }
+    }
+
+    func updateLastUsedAt(id: UUID) async throws {
+        if let error = mockError { throw error }
+        if let index = mockConnections.firstIndex(where: { $0.id == id }) {
+            mockConnections[index].lastUsedAt = Date()
+        }
+    }
+
     func search(query: String) async throws -> [Connection] {
         searchCalled = true
         lastSearchQuery = query

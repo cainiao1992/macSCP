@@ -70,7 +70,7 @@ enum AnalyticsService {
     static func initialize() {
         let config = TelemetryManagerConfiguration(appID: "B5BEE195-393B-4B84-8B10-0BEC90496251")
         config.defaultUser = anonymousUserId
-        TelemetryManager.initialize(with: config)
+        TelemetryDeck.initialize(config: config)
 
         // Increment session count
         sessionCount += 1
@@ -86,11 +86,11 @@ enum AnalyticsService {
     // MARK: - Core Tracking
 
     static func track(_ event: Event) {
-        TelemetryManager.send(event.rawValue)
+        TelemetryDeck.signal(event.rawValue)
     }
 
     static func track(_ event: Event, with parameters: [String: String]) {
-        TelemetryManager.send(event.rawValue, with: parameters)
+        TelemetryDeck.signal(event.rawValue, parameters: parameters)
     }
 
     // MARK: - Connection Tracking

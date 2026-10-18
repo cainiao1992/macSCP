@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct AppLockOverlayModifier: ViewModifier {
-    @State private var appLockManager = AppLockManager.shared
+    @Environment(\.appLockManager) private var appLockManager
 
     func body(content: Content) -> some View {
         content

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct TransfersPopover: View {
     @Bindable var viewModel: FileBrowserViewModel
+    @State private var isShowingCancelAllConfirmation = false
 
     private var needsScrolling: Bool {
         viewModel.allTransfers.count > 5
@@ -28,6 +29,18 @@ struct TransfersPopover: View {
             }
         }
         .frame(width: 340)
+        .confirmationDialog(
+            "Cancel All Transfers",
+            isPresented: $isShowingCancelAllConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Cancel \(viewModel.activeTransferCount) Transfers", role: .destructive) {
+                viewModel.cancelAllTransfers()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will cancel all \(viewModel.activeTransferCount) in-progress transfers.")
+        }
     }
 
     private var header: some View {
@@ -39,11 +52,12 @@ struct TransfersPopover: View {
 
             if viewModel.hasActiveTransfers {
                 Button("Cancel All") {
-                    viewModel.cancelAllTransfers()
+                    isShowingCancelAllConfirmation = true
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(.red)
+                .help("Cancel all in-progress transfers")
             }
 
             if !viewModel.recentTransfers.isEmpty {
@@ -144,7 +158,17 @@ struct TransferItemView: View {
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
 
+                        if let timeRemaining = transfer.displayTimeRemaining {
+                            Text(timeRemaining)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+
                         Spacer()
+
+                        Text(transfer.displaySpeed)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.secondary)
 
                         Text("\(transfer.percentCompleted)%")
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -293,7 +317,7 @@ struct TransfersToolbarButton: View {
     TransfersPopover(
         viewModel: DependencyContainer.shared.makeFileBrowserViewModel(
             connection: Connection(name: "Test", host: "localhost", username: "user"),
-            sftpSession: SFTPSession(),
+            sftpSession: SystemSFTPSession(),
             password: "test"
         )
     )

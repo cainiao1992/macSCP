@@ -30,6 +30,10 @@ final class ConnectionEntity {
     var s3Bucket: String?
     var s3Endpoint: String?
 
+    // Favorite and usage tracking (migration-safe defaults)
+    var isFavorite: Bool = false
+    var lastUsedAt: Date? = nil
+
     var folder: FolderEntity?
 
     init(
@@ -49,7 +53,9 @@ final class ConnectionEntity {
         connectionType: String = "sftp",
         s3Region: String? = nil,
         s3Bucket: String? = nil,
-        s3Endpoint: String? = nil
+        s3Endpoint: String? = nil,
+        isFavorite: Bool = false,
+        lastUsedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -68,5 +74,7 @@ final class ConnectionEntity {
         self.s3Region = s3Region
         self.s3Bucket = s3Bucket
         self.s3Endpoint = s3Endpoint
+        self.isFavorite = isFavorite
+        self.lastUsedAt = lastUsedAt
     }
 }

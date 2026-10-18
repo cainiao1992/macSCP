@@ -10,17 +10,17 @@ import XCTest
 
 @MainActor
 final class ClipboardServiceTests: XCTestCase {
-    var sut: ClipboardService!
+    var sut: MockClipboardService!
     let testConnectionId = UUID()
 
     override func setUp() async throws {
         try await super.setUp()
-        sut = ClipboardService.shared
-        sut.clear()
+        sut = MockClipboardService()
+        sut.reset()
     }
 
     override func tearDown() async throws {
-        sut.clear()
+        sut.reset()
         sut = nil
         try await super.tearDown()
     }

@@ -145,13 +145,12 @@ struct TerminalWindowData: Sendable {
 
 // MARK: - Window Manager
 @MainActor
-final class WindowManager: ObservableObject {
+final class WindowManager: WindowManagerProtocol, ObservableObject {
     static let shared = WindowManager()
 
     private var fileBrowserData: [String: FileBrowserWindowData] = [:]
     private var fileEditorData: [String: FileEditorWindowData] = [:]
     private var fileInfoData: [String: FileInfoWindowData] = [:]
-    private var terminalData: [String: TerminalWindowData] = [:]
 
     private init() {}
 
@@ -200,26 +199,10 @@ final class WindowManager: ObservableObject {
         fileInfoData.removeValue(forKey: id)
     }
 
-    // MARK: - Terminal Window
-    func storeTerminalData(_ data: TerminalWindowData) -> String {
-        let id = UUID().uuidString
-        terminalData[id] = data
-        return id
-    }
-
-    func getTerminalData(for id: String) -> TerminalWindowData? {
-        terminalData[id]
-    }
-
-    func removeTerminalData(for id: String) {
-        terminalData.removeValue(forKey: id)
-    }
-
     // MARK: - Cleanup
     func clearAllData() {
         fileBrowserData.removeAll()
         fileEditorData.removeAll()
         fileInfoData.removeAll()
-        terminalData.removeAll()
     }
 }

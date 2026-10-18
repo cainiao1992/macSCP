@@ -9,7 +9,7 @@ import Foundation
 
 @MainActor
 @Observable
-final class NavigationService {
+final class NavigationService: NavigationServiceProtocol {
     private var history: [String] = []
     private var currentIndex: Int = -1
     private let maxHistorySize = 50

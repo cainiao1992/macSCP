@@ -9,6 +9,7 @@ import SwiftUI
 
 struct FileEditorView: View {
     @Bindable var viewModel: FileEditorViewModel
+    @State private var isSaving = false
 
     init(viewModel: FileEditorViewModel) {
         self.viewModel = viewModel
@@ -45,17 +46,28 @@ struct FileEditorView: View {
                     Image(systemName: "magnifyingglass")
                 }
                 .keyboardShortcut("f", modifiers: .command)
+                .help("Find and Replace")
+                .accessibilityLabel("Find and Replace")
 
                 Button {
-                    Task {
-                        await viewModel.save()
-                    }
+                    save()
                 } label: {
                     Image(systemName: "square.and.arrow.down")
                 }
                 .keyboardShortcut("s", modifiers: .command)
-                .disabled(!viewModel.hasChanges)
+                .disabled(!viewModel.hasChanges || isSaving)
+                .help("Save")
+                .accessibilityLabel("Save")
             }
+        }
+    }
+
+    private func save() {
+        guard !isSaving else { return }
+        Task {
+            isSaving = true
+            await viewModel.save()
+            isSaving = false
         }
     }
 }
@@ -66,6 +78,6 @@ struct FileEditorView: View {
         filePath: "/home/user/test.txt",
         fileName: "test.txt",
         initialContent: "Hello, World!\n\nThis is a test file.",
-        fileRepository: FileRepository(sftpSession: SFTPSession())
+        fileRepository: FileRepository(sftpSession: SystemSFTPSession())
     ))
 }

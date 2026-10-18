@@ -35,7 +35,7 @@ struct EmptyStateView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [.blue.opacity(0.15), .cyan.opacity(0.1)],
+                            colors: [Color.accentColor.opacity(0.15), Color.accentColor.opacity(0.08)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -45,8 +45,9 @@ struct EmptyStateView: View {
                 Image(systemName: icon)
                     .font(.system(size: 32, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.accentColor)
             }
+            .accessibilityHidden(true)
 
             VStack(spacing: 8) {
                 Text(title)
@@ -71,8 +72,9 @@ struct EmptyStateView: View {
                 .controlSize(.regular)
             }
         }
-        .padding(40)
+        .padding(UIConstants.sectionSpacing)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
 

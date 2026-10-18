@@ -10,12 +10,17 @@ import SwiftUI
 struct EditorHeaderView: View {
     @Bindable var viewModel: FileEditorViewModel
 
+    @State private var isConfirmingReload = false
+    @State private var isConfirmingRevert = false
+    @State private var isSaving = false
+
     var body: some View {
         HStack {
             // File info
             HStack(spacing: UIConstants.smallSpacing) {
                 Image(systemName: "doc.text")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
 
                 Text(viewModel.fileName)
                     .font(.headline)
@@ -24,7 +29,7 @@ struct EditorHeaderView: View {
                     Circle()
                         .fill(.orange)
                         .frame(width: 8, height: 8)
-                        .help("Unsaved changes")
+                        .accessibilityLabel("Unsaved changes")
                 }
             }
 
@@ -33,39 +38,80 @@ struct EditorHeaderView: View {
             // Actions
             HStack(spacing: UIConstants.smallSpacing) {
                 Button {
-                    Task {
-                        await viewModel.reload()
+                    if viewModel.hasChanges {
+                        isConfirmingReload = true
+                    } else {
+                        Task { await viewModel.reload() }
                     }
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.borderless)
+                .disabled(isSaving)
                 .help("Reload from server")
+                .accessibilityLabel("Reload from server")
 
                 Button {
-                    viewModel.revertChanges()
+                    if viewModel.hasChanges {
+                        isConfirmingRevert = true
+                    } else {
+                        viewModel.revertChanges()
+                    }
                 } label: {
                     Image(systemName: "arrow.uturn.backward")
                 }
                 .buttonStyle(.borderless)
-                .disabled(!viewModel.hasChanges)
+                .disabled(!viewModel.hasChanges || isSaving)
                 .help("Revert changes")
+                .accessibilityLabel("Revert changes")
 
                 Button {
-                    Task {
-                        await viewModel.save()
-                    }
+                    save()
                 } label: {
                     Image(systemName: "square.and.arrow.down")
                 }
                 .buttonStyle(.borderless)
-                .disabled(!viewModel.hasChanges)
+                .disabled(!viewModel.hasChanges || isSaving)
                 .help("Save")
+                .accessibilityLabel("Save")
             }
         }
         .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.vertical, UIConstants.smallSpacing)
         .background(Color(.windowBackgroundColor))
+        .confirmationDialog(
+            "Reload from Server",
+            isPresented: $isConfirmingReload,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes & Reload", role: .destructive) {
+                Task { await viewModel.reload() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Reloading will discard your unsaved changes to \"\(viewModel.fileName)\".")
+        }
+        .confirmationDialog(
+            "Revert Changes",
+            isPresented: $isConfirmingRevert,
+            titleVisibility: .visible
+        ) {
+            Button("Revert Changes", role: .destructive) {
+                viewModel.revertChanges()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will discard your unsaved changes to \"\(viewModel.fileName)\".")
+        }
+    }
+
+    private func save() {
+        guard !isSaving else { return }
+        Task {
+            isSaving = true
+            await viewModel.save()
+            isSaving = false
+        }
     }
 }
 
@@ -75,6 +121,6 @@ struct EditorHeaderView: View {
         filePath: "/test.txt",
         fileName: "test.txt",
         initialContent: "Hello",
-        fileRepository: FileRepository(sftpSession: SFTPSession())
+        fileRepository: FileRepository(sftpSession: SystemSFTPSession())
     ))
 }

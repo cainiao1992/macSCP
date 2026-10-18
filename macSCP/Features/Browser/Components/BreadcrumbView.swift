@@ -9,11 +9,46 @@ import SwiftUI
 
 struct BreadcrumbView: View {
     let components: [PathComponent]
+    let currentPath: String
     let onNavigate: (String) -> Void
 
     @State private var hoveredPath: String?
+    @State private var isEditing = false
+    @State private var editPath: String = ""
+    @FocusState private var isFieldFocused: Bool
 
     var body: some View {
+        Group {
+            if isEditing {
+                pathEditor
+            } else {
+                breadcrumbContent
+            }
+        }
+        .frame(height: 28)
+        .background(.bar)
+    }
+
+    private var pathEditor: some View {
+        TextField("Path", text: $editPath)
+            .font(.system(size: 12, design: .monospaced))
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .focused($isFieldFocused)
+            .onSubmit {
+                let trimmed = editPath.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    onNavigate(trimmed)
+                }
+                isEditing = false
+            }
+            .onExitCommand {
+                isEditing = false
+            }
+    }
+
+    private var breadcrumbContent: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
@@ -25,6 +60,7 @@ struct BreadcrumbView: View {
                             .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(.quaternary)
                             .padding(.horizontal, 1)
+                            .accessibilityHidden(true)
 
                         pathButton(text: component.name, path: component.path, isLast: component.path == components.last?.path)
                             .id(component.path)
@@ -41,8 +77,13 @@ struct BreadcrumbView: View {
                 }
             }
         }
-        .frame(height: 28)
-        .background(.bar)
+        .onTapGesture(count: 2) {
+            editPath = currentPath
+            isEditing = true
+            isFieldFocused = true
+        }
+        .help("Double-click to edit path")
+        .accessibilityLabel("Path: \(currentPath)")
     }
 
     @ViewBuilder
@@ -61,15 +102,17 @@ struct BreadcrumbView: View {
                         .font(.system(size: 12, weight: isLast ? .medium : .regular))
                 }
             }
-            .foregroundStyle(isLast ? .primary : .tertiary)
+            .foregroundStyle(isLast ? .primary : .secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(isHovered ? Color.primary.opacity(0.06) : .clear)
+                RoundedRectangle(cornerRadius: UIConstants.smallCornerRadius, style: .continuous)
+                    .fill(isHovered ? Color.primary.opacity(0.08) : .clear)
             }
         }
         .buttonStyle(.plain)
+        .help("Go to \(path)")
+        .accessibilityLabel(isLast ? "Current folder: \(path)" : "Go to \(path)")
         .onHover { hovering in
             hoveredPath = hovering ? path : nil
         }
@@ -81,6 +124,7 @@ struct BreadcrumbView: View {
     VStack(spacing: 0) {
         BreadcrumbView(
             components: [],
+            currentPath: "/",
             onNavigate: { _ in }
         )
 
@@ -92,6 +136,7 @@ struct BreadcrumbView: View {
                 PathComponent(name: "user", path: "/home/user"),
                 PathComponent(name: "documents", path: "/home/user/documents")
             ],
+            currentPath: "/home/user/documents",
             onNavigate: { _ in }
         )
 
@@ -105,6 +150,7 @@ struct BreadcrumbView: View {
                 PathComponent(name: "myproject", path: "/var/www/html/myproject"),
                 PathComponent(name: "src", path: "/var/www/html/myproject/src")
             ],
+            currentPath: "/var/www/html/myproject/src",
             onNavigate: { _ in }
         )
     }

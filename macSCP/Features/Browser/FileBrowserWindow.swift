@@ -12,25 +12,18 @@ struct FileBrowserWindow: View {
     @State private var viewModel: FileBrowserViewModel?
     @State private var showMissingDataError = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.windowManager) private var windowManager
+    @Environment(\.makeFileBrowserViewModel) private var makeFileBrowserViewModel
+    @Environment(\.makeS3FileBrowserViewModel) private var makeS3FileBrowserViewModel
+    @Environment(\.makeS3Session) private var makeS3Session
+    @Environment(\.makeSFTPSession) private var makeSFTPSessionFactory
 
     var body: some View {
         Group {
             if showMissingDataError {
-                VStack(spacing: 16) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundStyle(.orange)
-                    Text("Session Expired")
-                        .font(.headline)
-                    Text("This window's session data was lost. Please reconnect from the main window.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                    Button("Close Window") {
-                        dismiss()
-                    }
+                SessionExpiredView {
+                    dismiss()
                 }
-                .padding(32)
             } else if let viewModel = viewModel {
                 FileBrowserView(viewModel: viewModel)
                     .navigationTitle(viewModel.connection.name)
@@ -46,15 +39,11 @@ struct FileBrowserWindow: View {
 
     @MainActor
     private func initializeViewModel() {
-        let windowManager = WindowManager.shared
-
         guard let data = windowManager.getFileBrowserData(for: windowId) else {
             logError("No window data found for ID: \(windowId)", category: .ui)
             showMissingDataError = true
             return
         }
-
-        let container = DependencyContainer.shared
 
         let connection = Connection(
             id: data.connectionId,
@@ -72,19 +61,19 @@ struct FileBrowserWindow: View {
 
         if data.connectionType == .s3 {
             // S3 connection
-            let s3Session = container.makeS3Session()
-            viewModel = container.makeS3FileBrowserViewModel(
-                connection: connection,
-                s3Session: s3Session,
-                secretAccessKey: data.s3SecretAccessKey ?? data.password
+            let s3Session = makeS3Session()
+            viewModel = makeS3FileBrowserViewModel(
+                connection,
+                s3Session,
+                data.s3SecretAccessKey ?? data.password
             )
         } else {
             // SFTP connection
-            let sftpSession = container.makeSFTPSession()
-            viewModel = container.makeFileBrowserViewModel(
-                connection: connection,
-                sftpSession: sftpSession,
-                password: data.password
+            let sftpSession = makeSFTPSessionFactory()
+            viewModel = makeFileBrowserViewModel(
+                connection,
+                sftpSession,
+                data.password
             )
         }
     }

@@ -13,131 +13,78 @@ final class BrowserFlowUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["--uitesting"]
         app.launch()
+
+        let menuBar = app.menuBars.firstMatch
+        XCTAssertTrue(menuBar.waitForExistence(timeout: 10), "App should launch with menu bar")
     }
 
     override func tearDownWithError() throws {
         app = nil
     }
 
-    // MARK: - Helper
-
-    /// Waits for the app to be ready by checking for menu bar (always present in macOS apps)
-    private func waitForAppReady() -> Bool {
-        let menuBar = app.menuBars.firstMatch
-        return menuBar.waitForExistence(timeout: 5)
-    }
-
-    // MARK: - Note about Browser Tests
-    // These tests verify the basic structure of the browser window.
-    // Full browser testing requires a connected SFTP session which
-    // is typically done with a mock server or test environment.
-
-    // MARK: - Window Tests
-
-    func testMainWindowLoads() {
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should launch with menu bar")
-
-        // The app should be running and have UI elements
-        XCTAssertTrue(app.state == .runningForeground, "App should be running in foreground")
-    }
-
     // MARK: - Menu Tests
 
     func testFileMenuExists() {
-        // Given
-        let menuBar = app.menuBars.firstMatch
-        let fileMenu = menuBar.menuBarItems["File"]
-
-        // Then
-        XCTAssertTrue(fileMenu.exists)
+        let fileMenu = app.menuBars.firstMatch.menuBarItems["File"]
+        XCTAssertTrue(fileMenu.waitForExistence(timeout: 3), "File menu should exist")
     }
 
     func testEditMenuExists() {
-        // Given
-        let menuBar = app.menuBars.firstMatch
-        let editMenu = menuBar.menuBarItems["Edit"]
-
-        // Then
-        XCTAssertTrue(editMenu.exists)
+        let editMenu = app.menuBars.firstMatch.menuBarItems["Edit"]
+        XCTAssertTrue(editMenu.waitForExistence(timeout: 3), "Edit menu should exist")
     }
 
     func testViewMenuExists() {
-        // Given
-        let menuBar = app.menuBars.firstMatch
-        let viewMenu = menuBar.menuBarItems["View"]
-
-        // Then
-        XCTAssertTrue(viewMenu.exists)
+        let viewMenu = app.menuBars.firstMatch.menuBarItems["View"]
+        XCTAssertTrue(viewMenu.waitForExistence(timeout: 3), "View menu should exist")
     }
 
     // MARK: - Keyboard Shortcut Tests
 
     func testCommandNOpensNewConnection() {
-        // When
         app.typeKey("n", modifierFlags: .command)
 
-        // Then
         let sheet = app.sheets.firstMatch
-        // Note: The sheet may or may not appear depending on implementation
-        XCTAssertTrue(true) // Placeholder - verify behavior in actual testing
+        XCTAssertTrue(sheet.waitForExistence(timeout: 3), "New connection sheet should appear after Cmd+N")
+
+        let nameField = sheet.textFields["nameField"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 2), "Name field should exist in sheet")
     }
 
-    func testCommandRRefreshes() {
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should be ready")
+    func testCommandRDoesNotCrash() {
+        XCTAssertTrue(app.menuBars.firstMatch.waitForExistence(timeout: 3))
 
-        // When
         app.typeKey("r", modifierFlags: .command)
 
-        // Then - app should handle the refresh command without crashing
-        XCTAssertTrue(app.state == .runningForeground, "App should still be running")
+        XCTAssertTrue(app.menuBars.firstMatch.waitForExistence(timeout: 3), "App should still be running after Cmd+R")
     }
 
-    // MARK: - Accessibility Tests
+    // MARK: - Window Management Tests
 
-    func testMainWindowIsAccessible() {
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should be ready")
+    func testMultipleWindowsCanBeOpened() {
+        let newButton = app.buttons["newConnectionButton"]
+        XCTAssertTrue(newButton.waitForExistence(timeout: 5))
 
-        // App should be running in foreground
-        XCTAssertTrue(app.state == .runningForeground, "App should be running in foreground")
+        newButton.click()
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 3))
+
+        XCTAssertTrue(sheet.exists, "Sheet should be visible")
+
+        let cancelButton = sheet.buttons["cancelButton"]
+        if cancelButton.exists {
+            cancelButton.click()
+        }
     }
 
-    func testToolbarIsAccessible() {
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should be ready")
+    // MARK: - Toolbar Tests
 
-        // App should be running - toolbar may vary based on UI state
-        XCTAssertTrue(app.state == .runningForeground, "App should be running")
-    }
+    func testToolbarButtonsAccessible() {
+        XCTAssertTrue(app.menuBars.firstMatch.waitForExistence(timeout: 3))
 
-    // MARK: - Navigation UI Tests (Structure Only)
-
-    func testNavigationStructure() {
-        // This test verifies the expected navigation UI structure
-        // Actual navigation testing requires a connected session
-
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should be ready")
-
-        // App should be running - navigation structure may vary
-        XCTAssertTrue(app.state == .runningForeground, "App should be running")
-    }
-
-    // MARK: - Error Handling UI Tests
-
-    func testErrorAlertStructure() {
-        // This test verifies that alert dialogs can appear
-        // Actual error alerts require triggering error conditions
-
-        // Verify app is ready
-        XCTAssertTrue(waitForAppReady(), "App should be ready")
-
-        // App should be running and able to show alerts
-        XCTAssertTrue(app.state == .runningForeground, "App should be running")
+        let newButton = app.buttons["newConnectionButton"]
+        XCTAssertTrue(newButton.waitForExistence(timeout: 3), "New connection button should be accessible")
     }
 
     // MARK: - Performance Tests

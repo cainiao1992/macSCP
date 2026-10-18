@@ -49,6 +49,7 @@ struct ConnectionFormSheet: View {
     @State private var selectedFolderId: UUID?
     @State private var tags: [String] = []
     @State private var newTag: String = ""
+    @FocusState private var isNameFocused: Bool
 
     // S3-specific fields
     @State private var s3Region: String = "us-east-1"
@@ -107,13 +108,19 @@ struct ConnectionFormSheet: View {
                 // Connection details based on type
                 Section("Connection") {
                     TextField("Name", text: $name)
+                        .focused($isNameFocused)
+                        .accessibilityIdentifier("nameField")
 
                     if selectedType == .sftp {
                         TextField("Host", text: $host)
+                            .accessibilityIdentifier("hostField")
                         TextField("Port", text: $port)
+                            .accessibilityIdentifier("portField")
                         TextField("Username", text: $username)
+                            .accessibilityIdentifier("usernameField")
                     } else if selectedType == .s3 {
                         TextField("Access Key ID", text: $username)
+                            .accessibilityIdentifier("usernameField")
                         SecureField("Secret Access Key", text: $s3SecretAccessKey)
                         TextField("Bucket", text: $s3Bucket)
                         TextField("Region", text: $s3Region)
@@ -136,10 +143,13 @@ struct ConnectionFormSheet: View {
                             SecureField("Password", text: $password)
                             Toggle("Save password in Keychain", isOn: $savePassword)
                         } else {
-                            HStack {
-                                TextField("Private Key Path", text: $privateKeyPath)
-                                Button("Browse") {
-                                    browseForKey()
+                            LabeledContent("Private Key") {
+                                HStack {
+                                    TextField("Path", text: $privateKeyPath)
+                                        .textFieldStyle(.roundedBorder)
+                                    Button("Browse") {
+                                        browseForKey()
+                                    }
                                 }
                             }
                         }
@@ -161,9 +171,9 @@ struct ConnectionFormSheet: View {
 
                     // Tags
                     LabeledContent("Tags") {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: UIConstants.smallSpacing) {
                             HStack {
-                                TextField("", text: $newTag)
+                                TextField("", text: $newTag, prompt: Text("Add a tag"))
                                     .onSubmit {
                                         addTag()
                                     }
@@ -175,6 +185,8 @@ struct ConnectionFormSheet: View {
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(newTag.trimmed.isEmpty)
+                                .help("Add Tag")
+                                .accessibilityLabel("Add Tag")
                             }
 
                             if !tags.isEmpty {
@@ -211,6 +223,7 @@ struct ConnectionFormSheet: View {
                 }
                 .keyboardShortcut(.cancelAction)
                 .buttonStyle(.bordered)
+                .accessibilityIdentifier("cancelButton")
 
                 Button(mode.saveButtonTitle) {
                     save()
@@ -218,12 +231,16 @@ struct ConnectionFormSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
                 .disabled(!isValid)
+                .accessibilityIdentifier("saveButton")
             }
             .padding()
         }
         .frame(width: 500, height: 580)
         .onAppear {
             loadExistingData()
+            if !isEditMode {
+                isNameFocused = true
+            }
         }
     }
 
@@ -403,26 +420,28 @@ struct TagChip: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(tag)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(isHovering ? .red : .primary)
+        Button(action: onRemove) {
+            HStack(spacing: UIConstants.xsSpacing) {
+                Text(tag)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(isHovering ? .red : .primary)
 
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 12))
-                .foregroundStyle(isHovering ? AnyShapeStyle(.red) : AnyShapeStyle(.tertiary))
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(isHovering ? AnyShapeStyle(.red) : AnyShapeStyle(.tertiary))
+            }
+            .padding(.leading, 8)
+            .padding(.trailing, 5)
+            .padding(.vertical, 3)
+            .background(.fill.tertiary, in: Capsule())
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 5)
-        .padding(.vertical, 3)
-        .background(.fill.tertiary, in: Capsule())
+        .buttonStyle(.plain)
+        .help("Remove tag")
+        .accessibilityLabel("Remove tag \(tag)")
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovering = hovering
             }
-        }
-        .onTapGesture {
-            onRemove()
         }
     }
 }

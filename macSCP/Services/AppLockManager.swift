@@ -30,8 +30,8 @@ enum InactivityTimeout: Int, CaseIterable, Sendable, Identifiable {
 
 @MainActor
 @Observable
-final class AppLockManager {
-    static let shared = AppLockManager()
+final class AppLockManager: AppLockManagerProtocol {
+    static let shared = AppLockManager(biometricService: BiometricAuthService.shared)
 
     // MARK: - State
 
@@ -99,7 +99,7 @@ final class AppLockManager {
 
     // MARK: - Initialization
 
-    private init(biometricService: BiometricAuthServiceProtocol = BiometricAuthService.shared) {
+    init(biometricService: BiometricAuthServiceProtocol) {
         self.biometricService = biometricService
 
         // Load persisted preferences (didSet not called during init)
@@ -244,8 +244,8 @@ final class AppLockManager {
             forName: NSApplication.didResignActiveNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
+        ) { _ in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
                 if self.lockOnAppResume {
                     self.lock(reason: "app went to background")
@@ -258,8 +258,8 @@ final class AppLockManager {
             forName: NSApplication.didBecomeActiveNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
+        ) { _ in
+            Task { @MainActor [weak self] in
                 self?.recordActivity()
             }
         }

@@ -49,9 +49,15 @@ final class DependencyContainer: ObservableObject {
         WindowManager.shared
     }()
 
+    // MARK: - Tab Manager
+
+    lazy var tabManager: TabManager = {
+        TabManager(dependencyContainer: self)
+    }()
+
     // MARK: - SFTP Session Factory
     func makeSFTPSession() -> SFTPSessionProtocol {
-        SFTPSession()
+        SystemSFTPSession()
     }
 
     // MARK: - S3 Session Factory
@@ -60,8 +66,8 @@ final class DependencyContainer: ObservableObject {
     }
 
     // MARK: - Terminal Session Factory
-    func makeTerminalSession() -> TerminalSessionProtocol {
-        TerminalSession()
+    func makeTerminalSession(connectionData: TerminalWindowData) -> TerminalSessionProtocol {
+        SystemTerminalSession()
     }
 
     // MARK: - File Repository Factory
@@ -80,7 +86,9 @@ final class DependencyContainer: ObservableObject {
             connectionRepository: connectionRepository,
             folderRepository: folderRepository,
             keychainService: keychainService,
-            windowManager: windowManager
+            windowManager: windowManager,
+            tabManager: tabManager,
+            appLockManager: appLockManager
         )
     }
 
@@ -95,6 +103,7 @@ final class DependencyContainer: ObservableObject {
             sftpSession: sftpSession,
             fileRepository: fileRepository,
             clipboardService: clipboardService,
+            windowManager: windowManager,
             password: password
         )
     }
@@ -110,8 +119,29 @@ final class DependencyContainer: ObservableObject {
             s3Session: s3Session,
             fileRepository: fileRepository,
             clipboardService: clipboardService,
+            windowManager: windowManager,
             secretAccessKey: secretAccessKey
         )
+    }
+
+    /// Unified factory: creates the right FileBrowserViewModel from connection data + password/secret.
+    /// Handles both SFTP and S3 branching internally.
+    func makeFileBrowserViewModel(connection: Connection, password: String) -> FileBrowserViewModel {
+        if connection.connectionType == .s3 {
+            let session = makeS3Session()
+            return makeS3FileBrowserViewModel(
+                connection: connection,
+                s3Session: session,
+                secretAccessKey: password
+            )
+        } else {
+            let session = makeSFTPSession()
+            return makeFileBrowserViewModel(
+                connection: connection,
+                sftpSession: session,
+                password: password
+            )
+        }
     }
 
     func makeFileEditorViewModel(
@@ -129,6 +159,56 @@ final class DependencyContainer: ObservableObject {
         )
     }
 
+    /// Encapsulates the session-creation + connect logic needed by
+    /// FileEditorWindow, so the Window itself never reaches into the container.
+    /// Returns the file repository plus the live S3/SFTP session (whichever
+    /// branch was taken) so the editor can clean it up on close.
+    func makeFileEditorDependencies(
+        for data: FileEditorWindowData
+    ) async throws -> (FileRepositoryProtocol, S3SessionProtocol?, SFTPSessionProtocol?) {
+        let fileRepository: FileRepositoryProtocol
+        var s3Session: S3SessionProtocol?
+        var sftpSession: SFTPSessionProtocol?
+
+        if data.connectionType == .s3 {
+            // S3 connection
+            let session = makeS3Session()
+            try await session.connect(
+                accessKeyId: data.username,
+                secretAccessKey: data.password,
+                region: data.s3Region ?? "us-east-1",
+                bucket: data.s3Bucket ?? "",
+                endpoint: data.s3Endpoint
+            )
+            fileRepository = makeS3FileRepository(session: session)
+            s3Session = session
+        } else {
+            // SFTP connection
+            let session = makeSFTPSession()
+            switch data.authMethod {
+            case .password:
+                try await session.connect(
+                    host: data.host,
+                    port: data.port,
+                    username: data.username,
+                    password: data.password
+                )
+            case .privateKey:
+                try await session.connect(
+                    host: data.host,
+                    port: data.port,
+                    username: data.username,
+                    privateKeyPath: data.privateKeyPath ?? "",
+                    passphrase: data.password.isEmpty ? nil : data.password
+                )
+            }
+            fileRepository = makeFileRepository(session: session)
+            sftpSession = session
+        }
+
+        return (fileRepository, s3Session, sftpSession)
+    }
+
     func makeFileInfoViewModel(file: RemoteFile, connectionName: String) -> FileInfoViewModel {
         FileInfoViewModel(file: file, connectionName: connectionName)
     }
@@ -142,6 +222,26 @@ final class DependencyContainer: ObservableObject {
             connectionName: connectionName,
             session: session,
             connectionData: connectionData
+        )
+    }
+
+    /// Convenience factory for terminal tabs: builds TerminalWindowData + session from a connection.
+    func makeTerminalViewModel(connection: Connection, password: String) -> TerminalViewModel {
+        let data = TerminalWindowData(
+            connectionId: connection.id,
+            connectionName: connection.name,
+            host: connection.host,
+            port: connection.port,
+            username: connection.username,
+            password: password,
+            authMethod: connection.authMethod,
+            privateKeyPath: connection.privateKeyPath
+        )
+        let session = makeTerminalSession(connectionData: data)
+        return makeTerminalViewModel(
+            connectionName: connection.name,
+            session: session,
+            connectionData: data
         )
     }
 

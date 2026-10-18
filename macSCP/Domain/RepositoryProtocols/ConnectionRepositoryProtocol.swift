@@ -29,6 +29,12 @@ protocol ConnectionRepositoryProtocol: Sendable {
     /// Moves a connection to a folder
     func move(connectionId: UUID, toFolderId folderId: UUID?) async throws
 
+    /// Toggles the favorite state of a connection
+    func toggleFavorite(id: UUID) async throws
+
+    /// Updates the last-used timestamp of a connection to now
+    func updateLastUsedAt(id: UUID) async throws
+
     /// Searches connections by name
     func search(query: String) async throws -> [Connection]
 

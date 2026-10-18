@@ -42,9 +42,9 @@ struct EditorStatusBar: View {
                     .foregroundStyle(.green)
             }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 6)
-        .background(Color(.windowBackgroundColor))
+        .padding(.horizontal, UIConstants.statusBarHPadding)
+        .padding(.vertical, UIConstants.statusBarVPadding)
+        .background(.bar)
     }
 }
 
@@ -71,6 +71,6 @@ private struct StatItem: View {
         filePath: "/home/user/documents/test.txt",
         fileName: "test.txt",
         initialContent: "Hello, World!",
-        fileRepository: FileRepository(sftpSession: SFTPSession())
+        fileRepository: FileRepository(sftpSession: SystemSFTPSession())
     ))
 }

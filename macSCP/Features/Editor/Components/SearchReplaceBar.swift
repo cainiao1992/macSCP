@@ -10,6 +10,7 @@ import SwiftUI
 struct SearchReplaceBar: View {
     @Bindable var viewModel: FileEditorViewModel
     @FocusState private var isSearchFocused: Bool
+    @State private var isShowingReplaceAllConfirmation = false
 
     var body: some View {
         VStack(spacing: UIConstants.smallSpacing) {
@@ -17,6 +18,7 @@ struct SearchReplaceBar: View {
             HStack(spacing: UIConstants.smallSpacing) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
 
                 TextField("Search", text: $viewModel.searchText)
                     .textFieldStyle(.plain)
@@ -56,6 +58,8 @@ struct SearchReplaceBar: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(viewModel.searchResults.isEmpty)
+                .help("Previous Match")
+                .accessibilityLabel("Previous match")
 
                 Button {
                     viewModel.findNext()
@@ -64,6 +68,8 @@ struct SearchReplaceBar: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(viewModel.searchResults.isEmpty)
+                .help("Next Match")
+                .accessibilityLabel("Next match")
 
                 // Status
                 Text(viewModel.searchStatusText)
@@ -79,12 +85,15 @@ struct SearchReplaceBar: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .help("Close Search")
+                .accessibilityLabel("Close search")
             }
 
             // Replace row
             HStack(spacing: UIConstants.smallSpacing) {
                 Image(systemName: "arrow.left.arrow.right")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
 
                 TextField("Replace", text: $viewModel.replaceText)
                     .textFieldStyle(.plain)
@@ -97,7 +106,7 @@ struct SearchReplaceBar: View {
                 .disabled(viewModel.searchResults.isEmpty)
 
                 Button("Replace All") {
-                    viewModel.replaceAll()
+                    isShowingReplaceAllConfirmation = true
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -105,8 +114,20 @@ struct SearchReplaceBar: View {
             }
         }
         .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.vertical, UIConstants.smallSpacing)
         .background(Color(.controlBackgroundColor))
+        .confirmationDialog(
+            "Replace All",
+            isPresented: $isShowingReplaceAllConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Replace \(viewModel.searchResults.count) Occurrences", role: .destructive) {
+                viewModel.replaceAll()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will replace all \(viewModel.searchResults.count) occurrences of \"\(viewModel.searchText)\" in the file.")
+        }
         .onAppear {
             isSearchFocused = true
         }
@@ -119,6 +140,6 @@ struct SearchReplaceBar: View {
         filePath: "/test.txt",
         fileName: "test.txt",
         initialContent: "Hello, World! Hello again!",
-        fileRepository: FileRepository(sftpSession: SFTPSession())
+        fileRepository: FileRepository(sftpSession: SystemSFTPSession())
     ))
 }

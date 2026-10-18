@@ -11,7 +11,8 @@ import SwiftData
 final class FolderRepository: FolderRepositoryProtocol, @unchecked Sendable {
     private let dataStore: DataStore
 
-    init(dataStore: DataStore = .shared) {
+    @MainActor
+    init(dataStore: DataStore) {
         self.dataStore = dataStore
     }
 

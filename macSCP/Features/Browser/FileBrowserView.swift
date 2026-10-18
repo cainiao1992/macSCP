@@ -6,252 +6,297 @@
 //
 
 import SwiftUI
+import QuickLook
 
 struct FileBrowserView: View {
     @Bindable var viewModel: FileBrowserViewModel
     @Environment(\.openWindow) private var openWindow
+    @State private var quickLookURL: URL?
+    @State private var isPreparingPreview = false
 
     init(viewModel: FileBrowserViewModel) {
         self.viewModel = viewModel
     }
-
+    
     var body: some View {
+        browserChrome
+            .overlay {
+                if isPreparingPreview {
+                    ProgressView("Preparing Preview...")
+                        .padding()
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: UIConstants.cornerRadius, style: .continuous))
+                        .shadow(color: .black.opacity(0.15), radius: 12)
+                }
+            }
+            .task {
+                await viewModel.connect()
+            }
+            .sheet(isPresented: $viewModel.isShowingNewFolderSheet) {
+                NameInputSheet.newFolder(
+                    onConfirm: { name in
+                        Task {
+                            await viewModel.createFolder(name: name)
+                        }
+                    },
+                    onCancel: {
+                        viewModel.isShowingNewFolderSheet = false
+                    }
+                )
+            }
+            .sheet(isPresented: $viewModel.isShowingNewFileSheet) {
+                NameInputSheet.newFile(
+                    onConfirm: { name in
+                        Task {
+                            await viewModel.createFile(name: name)
+                        }
+                    },
+                    onCancel: {
+                        viewModel.isShowingNewFileSheet = false
+                    }
+                )
+            }
+            .sheet(isPresented: $viewModel.isShowingRenameSheet) {
+                if let file = viewModel.fileToRename {
+                    NameInputSheet.rename(
+                        currentName: file.name,
+                        onConfirm: { newName in
+                            Task {
+                                await viewModel.renameFile(file, to: newName)
+                            }
+                        },
+                        onCancel: {
+                            viewModel.isShowingRenameSheet = false
+                            viewModel.fileToRename = nil
+                        }
+                    )
+                }
+            }
+            .alert("Delete Files", isPresented: $viewModel.isShowingDeleteConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    Task {
+                        await viewModel.deleteFiles(viewModel.filesToDelete)
+                    }
+                }
+            } message: {
+                let count = viewModel.filesToDelete.count
+                Text("Are you sure you want to delete \(count) item\(count == 1 ? "" : "s")? This cannot be undone.")
+            }
+            .errorAlert($viewModel.error)
+            .alert("Host Key Changed", isPresented: $viewModel.isShowingHostKeyMismatchAlert) {
+                Button("Disconnect", role: .cancel) {
+                    viewModel.disconnectAfterHostKeyMismatch()
+                }
+                Button("Replace Key & Connect", role: .destructive) {
+                    Task {
+                        await viewModel.replaceHostKeyAndConnect()
+                    }
+                }
+            } message: {
+                Text("The server's host key for \(viewModel.connection.host):\(viewModel.connection.port) has changed. This may indicate the server has been reconfigured, or it could be a security concern.\n\nWould you like to replace the stored key and connect, or disconnect?")
+            }
+            .onDisappear {
+                Task {
+                    await viewModel.disconnect()
+                }
+            }
+            .quickLookPreview($quickLookURL)
+            .onChange(of: viewModel.pendingFileInfoWindowId) { _, windowId in
+                if let windowId = windowId {
+                    openWindow(id: WindowID.fileInfo, value: windowId)
+                    viewModel.clearPendingFileInfoWindow()
+                }
+            }
+            .onChange(of: viewModel.pendingEditorWindowId) { _, windowId in
+                if let windowId = windowId {
+                    openWindow(id: WindowID.fileEditor, value: windowId)
+                    viewModel.clearPendingEditorWindow()
+                }
+            }
+    }
+    
+    private var browserChrome: some View {
+        browserLayout
+            .frame(minWidth: WindowSize.minFileBrowser.width, minHeight: WindowSize.minFileBrowser.height)
+            .navigationTitle(viewModel.currentPath == "/" ? viewModel.connection.name : (viewModel.currentPath as NSString).lastPathComponent)
+            .navigationSubtitle(viewModel.isConnected ? viewModel.connection.connectionString : "Disconnected")
+            .accessibilityIdentifier("fileBrowser")
+            .toolbar {
+                ToolbarItemGroup(placement: .navigation) {
+                    Button {
+                        Task { await viewModel.goHome() }
+                    } label: {
+                        Image(systemName: "house")
+                    }
+                    .disabled(!viewModel.isConnected)
+                    .help("Go Home")
+                    
+                    Button {
+                        Task { await viewModel.goBack() }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .disabled(!viewModel.canGoBack)
+                    .help("Go Back")
+                    
+                    Button {
+                        Task { await viewModel.goForward() }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                    }
+                    .disabled(!viewModel.canGoForward)
+                    .help("Go Forward")
+                    
+                    Button {
+                        Task { await viewModel.goUp() }
+                    } label: {
+                        Image(systemName: "arrow.up")
+                    }
+                    .disabled(!viewModel.canGoUp)
+                    .help("Go Up")
+                }
+                
+                ToolbarItemGroup(placement: .primaryAction) {
+                    primaryActions
+                }
+            }
+    }
+    
+    @ViewBuilder
+    private var primaryActions: some View {
+        Menu {
+            Button {
+                viewModel.isShowingNewFolderSheet = true
+            } label: {
+                Label("New Folder", systemImage: "folder.badge.plus")
+            }
+            .accessibilityIdentifier("newFolderButton")
+
+            Button {
+                viewModel.isShowingNewFileSheet = true
+            } label: {
+                Label("New File", systemImage: "doc.badge.plus")
+            }
+            .accessibilityIdentifier("newFileButton")
+        } label: {
+            Label("New", systemImage: "plus")
+        }
+        .disabled(!viewModel.isConnected)
+        .help("New File or Folder")
+        .accessibilityIdentifier("newButton")
+
+        Button {
+            Task { await viewModel.uploadFiles() }
+        } label: {
+            Label("Upload", systemImage: "square.and.arrow.up")
+        }
+        .disabled(!viewModel.isConnected)
+        .help("Upload Files")
+        .accessibilityIdentifier("uploadButton")
+
+        Button {
+            viewModel.confirmDeleteSelected()
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+        .disabled(viewModel.selectedFiles.isEmpty)
+        .help("Delete Selected")
+        .accessibilityIdentifier("deleteButton")
+        
+        Spacer()
+        
+        if viewModel.connection.connectionType == .sftp {
+            Button {
+                viewModel.openTerminal()
+            } label: {
+                Label("Terminal", systemImage: "terminal")
+            }
+            .disabled(!viewModel.isConnected)
+            .help("Open Terminal")
+        }
+        
+        TransfersToolbarButton(viewModel: viewModel)
+        
+        Toggle(isOn: $viewModel.showHiddenFiles) {
+            Label(
+                viewModel.showHiddenFiles ? "Hide Hidden Files" : "Show Hidden Files",
+                systemImage: viewModel.showHiddenFiles ? "eye.fill" : "eye.slash"
+            )
+        }
+        .help("Toggle Hidden Files")
+        
+        Menu {
+            ForEach(RemoteFile.SortCriteria.allCases, id: \.self) { criteria in
+                Button {
+                    if viewModel.sortCriteria == criteria {
+                        viewModel.sortAscending.toggle()
+                    } else {
+                        viewModel.sortCriteria = criteria
+                        viewModel.sortAscending = true
+                    }
+                } label: {
+                    HStack {
+                        Text(criteria.rawValue)
+                        if viewModel.sortCriteria == criteria {
+                            Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label("Sort", systemImage: "arrow.up.arrow.down")
+        }
+        .help("Sort Options")
+    }
+    
+    private var browserLayout: some View {
         VStack(spacing: 0) {
-            // Breadcrumb path bar
             BreadcrumbView(
                 components: viewModel.pathComponents,
+                currentPath: viewModel.currentPath,
                 onNavigate: { path in
                     Task {
                         await viewModel.navigateTo(path)
                     }
                 }
             )
-
+            
             Divider()
-
-            // Content
+            
             contentView
-
+            
             Divider()
-
-            // Status Bar
+            
             statusBar
         }
-        .frame(minWidth: WindowSize.minFileBrowser.width, minHeight: WindowSize.minFileBrowser.height)
-        .navigationTitle(viewModel.currentPath == "/" ? viewModel.connection.name : (viewModel.currentPath as NSString).lastPathComponent)
-        .navigationSubtitle(viewModel.isConnected ? viewModel.connection.connectionString : "Disconnected")
-        .toolbar(id: "browserToolbar") {
-            // Navigation group
-            ToolbarItem(id: "back", placement: .navigation) {
-                Button {
-                    Task { await viewModel.goBack() }
-                } label: {
-                    Image(systemName: "chevron.left")
-                }
-                .disabled(!viewModel.canGoBack)
-                .help("Go Back")
-            }
-
-            ToolbarItem(id: "forward", placement: .navigation) {
-                Button {
-                    Task { await viewModel.goForward() }
-                } label: {
-                    Image(systemName: "chevron.right")
-                }
-                .disabled(!viewModel.canGoForward)
-                .help("Go Forward")
-            }
-
-            // Primary actions
-            ToolbarItem(id: "newItem", placement: .primaryAction) {
-                Menu {
-                    Button {
-                        viewModel.isShowingNewFolderSheet = true
-                    } label: {
-                        Label("New Folder", systemImage: "folder.badge.plus")
-                    }
-
-                    Button {
-                        viewModel.isShowingNewFileSheet = true
-                    } label: {
-                        Label("New File", systemImage: "doc.badge.plus")
-                    }
-                } label: {
-                    Label("New", systemImage: "plus")
-                }
-                .help("New File or Folder")
-            }
-
-            ToolbarItem(id: "upload", placement: .primaryAction) {
-                Button {
-                    Task { await viewModel.uploadFiles() }
-                } label: {
-                    Label("Upload", systemImage: "square.and.arrow.up")
-                }
-                .help("Upload Files")
-            }
-
-            ToolbarItem(id: "delete", placement: .primaryAction) {
-                Button {
-                    viewModel.confirmDeleteSelected()
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-                .disabled(viewModel.selectedFiles.isEmpty)
-                .help("Delete Selected")
-            }
-
-            ToolbarItem(id: "spacer1", placement: .primaryAction) {
-                Spacer()
-            }
-
-            // Terminal button (SFTP only)
-            ToolbarItem(id: "terminal", placement: .primaryAction) {
-                if viewModel.connection.connectionType == .sftp {
-                    Button {
-                        viewModel.openTerminal()
-                    } label: {
-                        Label("Terminal", systemImage: "terminal")
-                    }
-                    .disabled(!viewModel.isConnected)
-                    .help("Open Terminal")
-                }
-            }
-
-            // Transfers
-            ToolbarItem(id: "transfers", placement: .primaryAction) {
-                TransfersToolbarButton(viewModel: viewModel)
-            }
-
-            // View options
-            ToolbarItem(id: "hiddenFiles", placement: .primaryAction) {
-                Toggle(isOn: $viewModel.showHiddenFiles) {
-                    Label(
-                        viewModel.showHiddenFiles ? "Hide Hidden Files" : "Show Hidden Files",
-                        systemImage: viewModel.showHiddenFiles ? "eye.fill" : "eye.slash"
-                    )
-                }
-                .help("Toggle Hidden Files")
-            }
-
-            ToolbarItem(id: "sort", placement: .primaryAction) {
-                Menu {
-                    ForEach(RemoteFile.SortCriteria.allCases, id: \.self) { criteria in
-                        Button {
-                            if viewModel.sortCriteria == criteria {
-                                viewModel.sortAscending.toggle()
-                            } else {
-                                viewModel.sortCriteria = criteria
-                                viewModel.sortAscending = true
-                            }
-                        } label: {
-                            HStack {
-                                Text(criteria.rawValue)
-                                if viewModel.sortCriteria == criteria {
-                                    Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    Label("Sort", systemImage: "arrow.up.arrow.down")
-                }
-                .help("Sort Options")
-            }
-        }
-        .task {
-            await viewModel.connect()
-        }
-        .sheet(isPresented: $viewModel.isShowingNewFolderSheet) {
-            NameInputSheet.newFolder(
-                onConfirm: { name in
-                    Task {
-                        await viewModel.createFolder(name: name)
-                    }
-                },
-                onCancel: {
-                    viewModel.isShowingNewFolderSheet = false
-                }
-            )
-        }
-        .sheet(isPresented: $viewModel.isShowingNewFileSheet) {
-            NameInputSheet.newFile(
-                onConfirm: { name in
-                    Task {
-                        await viewModel.createFile(name: name)
-                    }
-                },
-                onCancel: {
-                    viewModel.isShowingNewFileSheet = false
-                }
-            )
-        }
-        .sheet(isPresented: $viewModel.isShowingRenameSheet) {
-            if let file = viewModel.fileToRename {
-                NameInputSheet.rename(
-                    currentName: file.name,
-                    onConfirm: { newName in
-                        Task {
-                            await viewModel.renameFile(file, to: newName)
-                        }
-                    },
-                    onCancel: {
-                        viewModel.isShowingRenameSheet = false
-                        viewModel.fileToRename = nil
-                    }
-                )
-            }
-        }
-        .alert("Delete Files", isPresented: $viewModel.isShowingDeleteConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
-                Task {
-                    await viewModel.deleteFiles(viewModel.filesToDelete)
-                }
-            }
-        } message: {
-            let count = viewModel.filesToDelete.count
-            Text("Are you sure you want to delete \(count) item\(count == 1 ? "" : "s")? This cannot be undone.")
-        }
-        .errorAlert($viewModel.error)
-        .onDisappear {
-            Task {
-                await viewModel.disconnect()
-            }
-        }
-        .onChange(of: viewModel.pendingFileInfoWindowId) { _, windowId in
-            if let windowId = windowId {
-                openWindow(id: WindowID.fileInfo, value: windowId)
-                viewModel.clearPendingFileInfoWindow()
-            }
-        }
-        .onChange(of: viewModel.pendingEditorWindowId) { _, windowId in
-            if let windowId = windowId {
-                openWindow(id: WindowID.fileEditor, value: windowId)
-                viewModel.clearPendingEditorWindow()
-            }
-        }
-        .onChange(of: viewModel.pendingTerminalWindowId) { _, windowId in
-            if let windowId = windowId {
-                openWindow(id: WindowID.terminal, value: windowId)
-                viewModel.clearPendingTerminalWindow()
-            }
-        }
     }
-
+    
     @ViewBuilder
     private var contentView: some View {
         switch viewModel.state {
         case .idle, .loading:
             LoadingView(message: viewModel.isConnected ? "Loading..." : "Connecting...")
-
+            
         case .success:
-            FileListView(
-                viewModel: viewModel,
-                onOpenEditor: openFileInEditor,
-                onGetInfo: showFileInfo
-            )
-
+            if viewModel.sortedFiles.isEmpty {
+                EmptyStateView(
+                    icon: "folder",
+                    title: "Empty Directory",
+                    message: "This directory is empty.\nDouble-click a file to open, press Space to preview.",
+                    actionTitle: "Upload Files",
+                    action: {
+                        Task { await viewModel.uploadFiles() }
+                    }
+                )
+            } else {
+                FileListView(
+                    viewModel: viewModel,
+                    onOpenEditor: openFileInEditor,
+                    onGetInfo: showFileInfo,
+                    onQuickLook: previewFile
+                )
+            }
+            
         case .error(let error):
             ErrorView(error: error) {
                 Task {
@@ -264,19 +309,18 @@ struct FileBrowserView: View {
             }
         }
     }
-
+    
     private var statusBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: UIConstants.mdSpacing) {
             // Connection status
             HStack(spacing: 5) {
-                Circle()
-                    .fill(viewModel.isConnected ? Color.green : Color.red)
-                    .frame(width: 7, height: 7)
+                ConnectionStatusDot(isConnected: viewModel.isConnected)
 
                 Text(viewModel.isConnected ? "Connected" : "Disconnected")
-                    .font(.system(size: 11))
+                    .font(.system(size: UIConstants.statusBarFontSize))
                     .foregroundStyle(.secondary)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -295,21 +339,21 @@ struct FileBrowserView: View {
             // File count
             HStack(spacing: 6) {
                 Text("\(viewModel.sortedFiles.count) items")
-                    .font(.system(size: 11))
+                    .font(.system(size: UIConstants.statusBarFontSize))
                     .foregroundStyle(.secondary)
 
                 if !viewModel.selectedFiles.isEmpty {
                     Text("\(viewModel.selectedFiles.count) selected")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: UIConstants.statusBarFontSize, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, UIConstants.statusBarHPadding)
+        .padding(.vertical, UIConstants.statusBarVPadding)
         .background(.bar)
     }
-
+    
     private func openFileInEditor(_ file: RemoteFile) {
         Task {
             do {
@@ -320,22 +364,40 @@ struct FileBrowserView: View {
             }
         }
     }
-
+    
     private func showFileInfo(_ file: RemoteFile) {
         viewModel.showFileInfo(file)
+    }
+
+    private func previewFile(_ file: RemoteFile) {
+        Task {
+            isPreparingPreview = true
+            defer { isPreparingPreview = false }
+            do {
+                let tempDir = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("macSCP-quicklook", isDirectory: true)
+                try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+                let tempURL = tempDir.appendingPathComponent(file.name)
+
+                try await viewModel.downloadFileForPreview(file, to: tempURL)
+                quickLookURL = tempURL
+            } catch {
+                viewModel.error = AppError.from(error)
+            }
+        }
     }
 }
 
 // MARK: - Clipboard Status View
 struct ClipboardStatusView: View {
     let displayText: String
-
+    
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "doc.on.clipboard")
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
-
+            
             Text(displayText)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
@@ -346,7 +408,7 @@ struct ClipboardStatusView: View {
 // MARK: - Active Transfers Indicator
 struct ActiveTransfersIndicator: View {
     @Bindable var viewModel: FileBrowserViewModel
-
+    
     var body: some View {
         Button {
             viewModel.isShowingTransfersPopover = true
@@ -361,12 +423,20 @@ struct ActiveTransfersIndicator: View {
                     .progressViewStyle(.linear)
                     .frame(width: 50)
 
+                if let totalSpeed = viewModel.totalTransferSpeed {
+                    Text(totalSpeed)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+
                 Text("\(Int(viewModel.overallProgress * 100))%")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
         }
         .buttonStyle(.plain)
+        .help("View Active Transfers")
+        .accessibilityLabel("Active transfers, \(Int(viewModel.overallProgress * 100)) percent complete")
     }
 }
 
@@ -375,7 +445,7 @@ struct ActiveTransfersIndicator: View {
     FileBrowserView(
         viewModel: DependencyContainer.shared.makeFileBrowserViewModel(
             connection: Connection(name: "Test", host: "localhost", username: "user"),
-            sftpSession: SFTPSession(),
+            sftpSession: SystemSFTPSession(),
             password: "test"
         )
     )

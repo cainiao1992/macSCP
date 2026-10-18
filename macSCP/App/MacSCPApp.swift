@@ -11,14 +11,23 @@ import Sparkle
 
 @main
 struct MacSCPApp: App {
-    @StateObject private var container = DependencyContainer.shared
+    @StateObject private var container: DependencyContainer
+    @State private var connectionListViewModel: ConnectionListViewModel
 
     private let updaterController: SPUStandardUpdaterController
     @StateObject private var checkForUpdatesViewModel: CheckForUpdatesViewModel
 
     init() {
+        // Writes to dead ssh/scp pipes must return EPIPE instead of raising
+        // SIGPIPE and killing the process (see SystemSFTPSession stdin feeding).
+        signal(SIGPIPE, SIG_IGN)
+
+        let container = DependencyContainer.shared
+        self._container = StateObject(wrappedValue: container)
+        self._connectionListViewModel = State(initialValue: container.makeConnectionListViewModel())
+
         AnalyticsService.initialize()
-        AppLockManager.shared.lockIfNeeded()
+        container.appLockManager.lockIfNeeded()
 
         let controller = SPUStandardUpdaterController(
             startingUpdater: true,
@@ -32,32 +41,33 @@ struct MacSCPApp: App {
     }
 
     var body: some Scene {
-        // Main Window - Connection List
-        WindowGroup {
-            ConnectionListView(viewModel: container.makeConnectionListViewModel())
-                .appLockOverlay()
-        }
-        .modelContainer(container.modelContainer)
-        .defaultSize(WindowSize.main)
-        .commands {
-            appCommands
-        }
-
-        // File Browser Window
-        WindowGroup(id: WindowID.fileBrowser, for: String.self) { $windowId in
-            if let windowId = windowId {
-                FileBrowserWindow(windowId: windowId)
-                    .appLockOverlay()
-            }
+        // Unified Browser Window (tabbed file browser + connection sidebar)
+        WindowGroup("macSCP") {
+            UnifiedBrowserWindow(
+                tabManager: container.tabManager,
+                connectionListViewModel: connectionListViewModel
+            )
+            .appLockOverlay()
+                .environment(\.appLockManager, container.appLockManager)
+                .environment(\.windowManager, container.windowManager)
+                .environment(\.biometricService, BiometricAuthService.shared)
         }
         .modelContainer(container.modelContainer)
         .defaultSize(WindowSize.fileBrowser)
+        .commands {
+            appCommands
+        }
 
         // File Editor Window
         WindowGroup(id: WindowID.fileEditor, for: String.self) { $windowId in
             if let windowId = windowId {
                 FileEditorWindow(windowId: windowId)
                     .appLockOverlay()
+                    .environment(\.appLockManager, container.appLockManager)
+                    .environment(\.windowManager, container.windowManager)
+                    .environment(\.makeFileEditorDependencies, { data in
+                        try await container.makeFileEditorDependencies(for: data)
+                    })
             }
         }
         .modelContainer(container.modelContainer)
@@ -68,26 +78,20 @@ struct MacSCPApp: App {
             if let windowId = windowId {
                 FileInfoWindow(windowId: windowId)
                     .appLockOverlay()
+                    .environment(\.appLockManager, container.appLockManager)
+                    .environment(\.windowManager, container.windowManager)
             }
         }
         .modelContainer(container.modelContainer)
         .defaultSize(WindowSize.fileInfo)
         .windowResizability(.contentSize)
 
-        // Terminal Window
-        WindowGroup(id: WindowID.terminal, for: String.self) { $windowId in
-            if let windowId = windowId {
-                TerminalWindow(windowId: windowId)
-                    .appLockOverlay()
-            }
-        }
-        .modelContainer(container.modelContainer)
-        .defaultSize(WindowSize.terminal)
-
         // Settings Window (Cmd+,)
         Settings {
             SettingsView()
                 .appLockOverlay()
+                .environment(\.appLockManager, container.appLockManager)
+                .environment(\.biometricService, BiometricAuthService.shared)
         }
     }
 
@@ -100,12 +104,17 @@ struct MacSCPApp: App {
 
         CommandGroup(replacing: .newItem) {
             Button("New Connection") {
-                // Handled by main window
+                connectionListViewModel.isShowingNewConnectionSheet = true
             }
             .keyboardShortcut("n", modifiers: .command)
 
+            Button("New Tab") {
+                connectionListViewModel.isShowingNewConnectionSheet = true
+            }
+            .keyboardShortcut("t", modifiers: .command)
+
             Button("New Folder") {
-                // Handled by main window
+                connectionListViewModel.isShowingNewFolderSheet = true
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
         }
@@ -115,11 +124,31 @@ struct MacSCPApp: App {
                 // Handled by active window
             }
             .keyboardShortcut("r", modifiers: .command)
+
+            Button("Close Tab") {
+                Task {
+                    await container.tabManager.closeTab(at: container.tabManager.activeTabIndex ?? 0)
+                }
+            }
+            .keyboardShortcut("w", modifiers: .command)
+            .disabled(!container.tabManager.hasTabs)
+
+            Divider()
+
+            Button("Next Tab") {
+                container.tabManager.switchToNextTab()
+            }
+            .keyboardShortcut(.tab, modifiers: .control)
+
+            Button("Previous Tab") {
+                container.tabManager.switchToPreviousTab()
+            }
+            .keyboardShortcut(.tab, modifiers: [.control, .shift])
         }
 
         CommandGroup(replacing: .help) {
             Button("Report a Bug…") {
-                if let url = URL(string: "https://github.com/macnev2013/macSCP/issues") {
+                if let url = URL(string: "https://github.com/cainiao1992/macSCP/issues") {
                     NSWorkspace.shared.open(url)
                 }
             }

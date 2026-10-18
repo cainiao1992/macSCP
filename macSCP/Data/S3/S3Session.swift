@@ -19,6 +19,13 @@ actor S3Session: S3SessionProtocol {
 
     init() {}
 
+    /// Explicit page size for `ListObjectsV2`. A single response never returns
+    /// more than 1000 keys, so the pagination loop must be driven explicitly.
+    static let listPageSize = 1000
+
+    /// `DeleteObjects` accepts at most 1000 keys per request.
+    static let maxDeleteBatchSize = 1000
+
     // MARK: - Logging Helper
     private nonisolated func log(_ message: String, category: LogCategory = .s3) {
         Task { @MainActor in
@@ -253,22 +260,18 @@ actor S3Session: S3SessionProtocol {
         }
 
         // List all objects with this prefix and delete them
-        let listRequest = S3.ListObjectsV2Request(bucket: bucketName, prefix: prefix)
-        let response = try await s3.listObjectsV2(listRequest)
+        let keys = try await listAllObjectKeys(prefix: prefix)
 
-        if let contents = response.contents, !contents.isEmpty {
-            let objectsToDelete = contents.compactMap { object -> S3.ObjectIdentifier? in
-                guard let key = object.key else { return nil }
-                return S3.ObjectIdentifier(key: key)
-            }
-
-            if !objectsToDelete.isEmpty {
-                let deleteRequest = S3.DeleteObjectsRequest(
-                    bucket: bucketName,
-                    delete: S3.Delete(objects: objectsToDelete)
-                )
-                _ = try await s3.deleteObjects(deleteRequest)
-            }
+        var index = 0
+        while index < keys.count {
+            let end = min(index + Self.maxDeleteBatchSize, keys.count)
+            let objectsToDelete = keys[index..<end].map { S3.ObjectIdentifier(key: $0) }
+            let deleteRequest = S3.DeleteObjectsRequest(
+                bucket: bucketName,
+                delete: S3.Delete(objects: Array(objectsToDelete))
+            )
+            _ = try await s3.deleteObjects(deleteRequest)
+            index = end
         }
 
         // Also try to delete the directory marker itself
@@ -349,24 +352,19 @@ actor S3Session: S3SessionProtocol {
             destPrefix += "/"
         }
 
-        // List all objects with source prefix
-        let listRequest = S3.ListObjectsV2Request(bucket: bucketName, prefix: sourcePrefix)
-        let response = try await s3.listObjectsV2(listRequest)
+        // List all objects with source prefix, then copy each one
+        let keys = try await listAllObjectKeys(prefix: sourcePrefix)
 
-        if let contents = response.contents {
-            for object in contents {
-                if let key = object.key {
-                    let relativePath = String(key.dropFirst(sourcePrefix.count))
-                    let newKey = destPrefix + relativePath
+        for key in keys {
+            let relativePath = String(key.dropFirst(sourcePrefix.count))
+            let newKey = destPrefix + relativePath
 
-                    let copyRequest = S3.CopyObjectRequest(
-                        bucket: bucketName,
-                        copySource: "\(bucketName)/\(key)",
-                        key: newKey
-                    )
-                    _ = try await s3.copyObject(copyRequest)
-                }
-            }
+            let copyRequest = S3.CopyObjectRequest(
+                bucket: bucketName,
+                copySource: "\(bucketName)/\(key)",
+                key: newKey
+            )
+            _ = try await s3.copyObject(copyRequest)
         }
 
         log("Copied directory: \(sourcePath) to \(destinationPath)")
@@ -613,6 +611,51 @@ actor S3Session: S3SessionProtocol {
     }
 
     // MARK: - Private Helpers
+
+    /// Every object key under `prefix`, gathered across all `ListObjectsV2`
+    /// pages. A single response holds at most 1000 keys, so callers that need
+    /// the whole subtree must page through the listing.
+    private func listAllObjectKeys(prefix: String) async throws -> [String] {
+        guard let s3 = s3 else {
+            throw AppError.notConnected
+        }
+        let bucket = bucketName
+        let pageSize = Self.listPageSize
+
+        return try await Self.collectAllPages { token in
+            let request = S3.ListObjectsV2Request(
+                bucket: bucket,
+                continuationToken: token,
+                maxKeys: pageSize,
+                prefix: prefix
+            )
+            let response = try await s3.listObjectsV2(request)
+            return (
+                items: response.contents?.compactMap { $0.key } ?? [],
+                isTruncated: response.isTruncated ?? false,
+                nextToken: response.nextContinuationToken
+            )
+        }
+    }
+
+    /// Drives a paginated listing to completion. `fetch` is given the
+    /// continuation token for the page to read (nil for the first page) and
+    /// returns that page's items plus the backend's pagination state.
+    nonisolated static func collectAllPages<Item>(
+        fetch: (String?) async throws -> (items: [Item], isTruncated: Bool, nextToken: String?)
+    ) async throws -> [Item] {
+        var items: [Item] = []
+        var token: String?
+        while true {
+            let page = try await fetch(token)
+            items.append(contentsOf: page.items)
+            // A truncated page without a token cannot be followed; stop rather
+            // than spin forever.
+            guard page.isTruncated, let next = page.nextToken else { break }
+            token = next
+        }
+        return items
+    }
 
     /// Normalizes a path to an S3 key (removes leading /)
     private func normalizeKey(_ path: String) -> String {

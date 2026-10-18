@@ -23,7 +23,6 @@ enum WindowID {
     static let fileBrowser = "file-browser"
     static let fileEditor = "file-editor"
     static let fileInfo = "file-info"
-    static let terminal = "terminal"
 }
 
 // MARK: - Window Sizes
@@ -32,18 +31,34 @@ enum WindowSize {
     static let fileBrowser = CGSize(width: 1000, height: 700)
     static let fileEditor = CGSize(width: 800, height: 600)
     static let fileInfo = CGSize(width: 300, height: 400)
-    static let terminal = CGSize(width: 900, height: 600)
     static let minMain = CGSize(width: 700, height: 450)
     static let minFileBrowser = CGSize(width: 600, height: 400)
-    static let minTerminal = CGSize(width: 600, height: 400)
+    static let minTerminal = CGSize(width: 400, height: 250)
 }
 
-// MARK: - UI Constants
+// MARK: - UI Constants (Design Tokens)
+// Single source of truth for spacing, radii and shared chrome metrics.
+// Keep new UI on this scale instead of introducing one-off magic numbers.
 enum UIConstants {
-    static let cornerRadius: CGFloat = 8
-    static let smallCornerRadius: CGFloat = 4
-    static let spacing: CGFloat = 16
+    // Spacing scale — 4pt grid
+    static let xsSpacing: CGFloat = 4
     static let smallSpacing: CGFloat = 8
+    static let mdSpacing: CGFloat = 12
+    static let spacing: CGFloat = 16
+    static let xlSpacing: CGFloat = 24
+    static let sectionSpacing: CGFloat = 40
+
+    // Corner radius scale — chip / card / banner
+    static let smallCornerRadius: CGFloat = 4
+    static let chipCornerRadius: CGFloat = 5
+    static let cornerRadius: CGFloat = 8
+    static let bannerCornerRadius: CGFloat = 10
+
+    // Shared status bar metrics (browser / terminal / editor)
+    static let statusBarFontSize: CGFloat = 11
+    static let statusBarHPadding: CGFloat = 12
+    static let statusBarVPadding: CGFloat = 6
+
     static let iconSize: CGFloat = 24
     static let smallIconSize: CGFloat = 16
     static let animationDuration: TimeInterval = 0.25
